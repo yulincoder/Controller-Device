@@ -1,41 +1,22 @@
-import socket
+import gevent
+from gevent import monkey, socket
+
+from devicepool import devicesocketpool as dsp
+monkey.patch_all()
+
 import logger
 import json
 import traceback
-import subprocess
-from concurrent.futures import ThreadPoolExecutor
 from typing import Union, Tuple
 import threading
 import device
 import queue
-import gevent
-from gevent import monkey, socket, time
-monkey.patch_all()
-
-devices = {}
-'''
-test = []
-
-
-def call_ping(sn, device):
-    device.ping()
-    test.append(device.sn)
-    return sn, "OK"
-
-
-gs = []
-for e in devices.items():
-    g = gevent.spawn(call_ping, *e)
-    gs.append(g)
-for e in gs:
-    e.join()
-
-print(test)
-print(len(test))
-'''
+import redis
+import Config as cfg
+from communication import MessageQueue
 
 socket_queue = queue.Queue()
-
+redis_mq = MessageQueue()
 
 
 def checkdevice(data) -> Union[bool, str]:
@@ -52,7 +33,9 @@ def checkdevice(data) -> Union[bool, str]:
     except:
         return False
 
-def handshake(sock: socket, addr: Tuple[str, int]) -> Union[device.Device, None]:
+
+def handshake(sock: socket,
+              addr: Tuple[str, int]) -> Union[device.Device, None]:
     """
     Handshake
     :param sock:
@@ -67,16 +50,18 @@ def handshake(sock: socket, addr: Tuple[str, int]) -> Union[device.Device, None]
         gevent.sleep(3)
         try:
             data = sock_f.readline()
-            print(data)
             sn = checkdevice(data)
             if sn is False:
                 logger.warning("{}: poll {}, error sn with ip({})".format(
                     __file__, poll, str(addr)))
                 continue
-            d = device.GenericSwitcherDevice(sn=sn, ip_mac=addr, sock=sock, is_alive=True)
+            d = device.GenericSwitcherDevice(sn=sn,
+                                             ip_mac=addr,
+                                             sock=sock,
+                                             is_alive=True)
             logger.info(
-                '{}: poll {}, alive device {}, connection{} was succeed, save it.'.format(
-                    __file__, poll, len(devices), str(addr)))
+                '{}: poll {}, alive device {}, connection{} was succeed, save it.'
+                .format(__file__, poll, dsp.get_device_num(), str(addr)))
             break
         except:
             err_msg = traceback.format_exc()
@@ -102,21 +87,29 @@ def long_connection(d: device.Device) -> None:
     while True:
         data = d.readline()
         if data:
-            logger.info('{}: receive a message from {}: {}'.format(__file__, str(d.ip_mac), data))
-            # push to redis
+            logger.info('{}: receive a message from {}: {}'.format(
+                __file__, str(d.ip_mac), data))
+            redis_mq.put(str(data))
+            logger.error('----{}'.format(data))
             heartbeat_cnt = 0
         else:
             heartbeat_cnt += 1
 
-        if heartbeat_cnt == 20:
-            logger.info('{}:heart beat with {}'.format(__file__, str(d.ip_mac)))
+        if heartbeat_cnt == 10:
+            logger.info('{}:heart beat with {}'.format(__file__,
+                                                       str(d.ip_mac)))
             if d.heartbeat() is False:
-                logger.warning('{}:heart beat fail with {}, delete it.'.format(__file__, str(d.ip_mac)))
-                del devices[d.sn] # Fail to heartbeat_cnt, delete it from devices alive.
+                logger.warning('{}:heart beat fail with {}, delete it.'.format(
+                    __file__, str(d.ip_mac)))
+                dsp.set_alive(
+                    d.sn, False
+                )  # Fail to heartbeat_cnt, delete it from devices alive.
                 break
-            logger.info('{}:heart beat succeed with {}.'.format(__file__, str(d.ip_mac)))
+            logger.info('{}:heart beat succeed with {}.'.format(
+                __file__, str(d.ip_mac)))
             heartbeat_cnt = 0
         gevent.sleep(0.5)
+
 
 def maintain(sock: socket, addr: Tuple[str, int]) -> None:
     """
@@ -125,31 +118,26 @@ def maintain(sock: socket, addr: Tuple[str, int]) -> None:
     :param addr:
     :return:
     """
-    print('Accept new connection from %s:%s...' % addr)
+    logger.info('Accept new connection from %s:%s...' % addr)
     d = handshake(sock, addr)
     if d is None:
         logger.warning('{}: handshake with {} failed, close it.'.format(
             __file__, str(addr)))
         return
-    devices[d.sn] = d
-    long_connection(devices[d.sn])
-    '''
-    while True:
-        pass
-    '''
+    dsp.put_device(d.sn, d)
+    long_connection(dsp.peak_device(d.sn))
 
-def accept_connection_handler():
+
+def accept_connection_handler_thread():
     logger.info("{}: tcp process".format(__file__))
     while True:
         sock, addr = socket_queue.get()
-        print('---------------- ', len(devices.keys()))
         logger.info("{}: get a connection({})".format(__file__, str(addr)))
         gevent.spawn(maintain, sock, addr)
 
+
 def device_maintain():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    PACKET_SIZE = 4 * 1024
 
     # 监听端口:
     s.bind(('0.0.0.0', 9000))
@@ -157,8 +145,8 @@ def device_maintain():
     s.listen(10000)
     print('Waiting for connection...')
 
-    t = threading.Thread(target=accept_connection_handler)
-    t.start()
+    t1 = threading.Thread(target=accept_connection_handler_thread)
+    t1.start()
 
     while True:
         logger.info("{}: start accept".format(__file__))
@@ -166,3 +154,7 @@ def device_maintain():
 
         logger.info("{}: put a connection()".format(__file__, str(addr)))
         socket_queue.put((sock, addr))
+
+
+if __name__ == '__main__':
+    device_maintain()

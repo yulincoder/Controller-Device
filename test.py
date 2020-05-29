@@ -1,3 +1,4 @@
+
 import socket
 import json
 import time
@@ -6,38 +7,47 @@ import gevent
 
 from gevent import monkey, socket, time
 monkey.patch_all()
+cnt = 0
 
-def request(sn):
+
+def request(sn, close=True):
+    global cnt
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(15)
+    #s.settimeout(15)
     server = ("127.0.0.1", 9000)
     s.connect(server)
-    
+    s.setblocking(True)
     msg = {
         "v": "0.1",
         "sn": sn,
     }
 
     time.sleep(1)
-    msg = json.dumps(msg)
+    msg = json.dumps(msg) + '\n'
     s.sendall(bytes(msg, encoding='utf-8'))
 
-    print(s.recv(1000))
-    s.sendall(bytes(msg, encoding='utf-8'))
+    while not close:
+        cnt += 1
+        print(s.recv(1000))
+        s.sendall(bytes(msg, encoding='utf-8'))
+        msg = {
+            "type": "push",
+            "msg": "okokokoko",
+        }
+        msg = json.dumps(msg) + '\n'
+        s.sendall(bytes(msg, encoding='utf-8'))
 
-    gevent.sleep(2)
-    msg = {
-        "type": "push",
-        "msg": "okokokoko",
-    }
-    msg = json.dumps(msg)
-    s.sendall(bytes(msg, encoding='utf-8'))
-
+        time.sleep(1)
+        s.sendall(
+            bytes("From the device push message: {}\n".format(cnt),
+                  encoding='utf-8'))
     s.close()
+
 
 gs = []
 for e in range(200):
-    g = gevent.spawn(request, f"sn/controller/{e}")
+    g = gevent.spawn(request, f"sn/controller/{e*4000}",
+                     False if e < 2500 else True)
     gs.append(g)
 
 for g in gs:
