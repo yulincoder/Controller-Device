@@ -1,7 +1,7 @@
 import gevent
 from gevent import monkey, socket
 monkey.patch_all()
-
+import threading
 from devicepool import devicesocketpool as dsp
 
 import logger
@@ -133,7 +133,9 @@ def accept_connection_handler_thread():
     while True:
         sock, addr = socket_queue.get()
         logger.info("{}: get a connection({})".format(__file__, str(addr)))
-        gevent.spawn(maintain, sock, addr)
+        t = threading.Thread(target=maintain, args=(sock, addr))
+        t.start()
+        #gevent.spawn(maintain, sock, addr)
 
 
 def device_maintain():

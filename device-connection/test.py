@@ -35,6 +35,7 @@ def request(sn, close=True):
             "msg": "okokokoko",
         }
         msg = json.dumps(msg) + '\n'
+        print(msg)
         s.sendall(bytes(msg, encoding='utf-8'))
 
         time.sleep(1)
