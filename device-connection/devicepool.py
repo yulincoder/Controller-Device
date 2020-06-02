@@ -1,4 +1,5 @@
-
+from gevent import monkey
+monkey.patch_all()
 import device
 from typing import Union, Dict, Tuple
 # from multiprocessing.managers import BaseManager

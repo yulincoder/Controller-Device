@@ -1,8 +1,8 @@
 import gevent
 from gevent import monkey, socket
+monkey.patch_all()
 
 from devicepool import devicesocketpool as dsp
-monkey.patch_all()
 
 import logger
 import json
@@ -89,13 +89,13 @@ def long_connection(d: device.Device) -> None:
         if data:
             logger.info('{}: receive a message from {}: {}'.format(
                 __file__, str(d.ip_mac), data))
+            # Put Msg to MQ
             redis_mq.put(str(data))
-            logger.error('----{}'.format(data))
             heartbeat_cnt = 0
         else:
             heartbeat_cnt += 1
 
-        if heartbeat_cnt == 10:
+        if heartbeat_cnt >= (cfg.PING_PERIOD / 0.5):
             logger.info('{}:heart beat with {}'.format(__file__,
                                                        str(d.ip_mac)))
             if d.heartbeat() is False:

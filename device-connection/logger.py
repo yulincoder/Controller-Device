@@ -1,3 +1,5 @@
+from gevent import monkey, socket
+monkey.patch_all()
 import logging
 
 LOG_FILENAME = "device_log.log"

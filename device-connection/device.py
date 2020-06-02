@@ -1,3 +1,5 @@
+from gevent import monkey
+monkey.patch_all()
 from typing import Union, Tuple
 import socket
 import json
@@ -51,6 +53,7 @@ class GenericSwitcherDevice(Device):
         msg['sn'] = self.sn
         msg = bytes(json.dumps(msg) + '\n', encoding='utf-8')
         self.socket.sendall(msg)
+
         for poll in range(3):
             gevent.sleep(1)
             try:
@@ -63,9 +66,10 @@ class GenericSwitcherDevice(Device):
                     return True
             except:
                 err_msg = traceback.format_exc()
-                logger.info('{}: device({}) heartbeat was fail'.format(
-                    __file__, self.sn))
+                logger.info('{}: device({}) heartbeat was fail, {}'.format(
+                    __file__, self.sn, err_msg))
                 continue
+
         logger.warning('{}: device({}) heartbeat was fail'.format(
             __file__, self.sn))
         self.is_alive = False

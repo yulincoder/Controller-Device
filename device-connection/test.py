@@ -38,14 +38,18 @@ def request(sn, close=True):
         s.sendall(bytes(msg, encoding='utf-8'))
 
         time.sleep(1)
+        event = {
+            "event": "frome the device {}".format(cnt),
+            }
+        event = json.dumps(event)+'\n'
+        print(event)
         s.sendall(
-            bytes("From the device push message: {}\n".format(cnt),
-                  encoding='utf-8'))
+            bytes(event, encoding='utf-8'))
     s.close()
 
 
 gs = []
-for e in range(200):
+for e in range(500):
     g = gevent.spawn(request, f"sn/controller/{e*4000}",
                      False if e < 2500 else True)
     gs.append(g)

@@ -2,6 +2,8 @@
 #
 # A cross-platform Mssage queue based redis
 #
+from gevent import monkey
+monkey.patch_all()
 import redis
 import Config as cfg
 

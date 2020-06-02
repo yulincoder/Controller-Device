@@ -1,4 +1,4 @@
 HEARTBEAT = {
-    'type': "heartbeat",
+    'type': "ping",
     'sn': None
 }
