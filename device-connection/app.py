@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, Response
 import threading
 
 import device_support
@@ -54,6 +54,21 @@ def get_sn_is_alive():
         'sn': sn,
     }
     return json.dumps(resp)
+
+
+@app.route('/push/push_msg', methods=['POST'])
+def push_msg():
+    """
+    HTTP API: push a set msg to device
+    """
+    data = request.get_json()
+    if not data:
+        logger.warning("{}: get a invaild data({}) with /push/push_msg".format(__file__, data))
+        invaild_resp = {'type': "push status", 'ctx': "invaild data"}
+        return Response(json.dumps(invaild_resp), status=400, mimetype='application/json')
+    else:
+        logger.info("{}: get data({}) with /push/push_msg".format(__file__, data))
+        return Response('{"status": "ok"}', status=200, mimetype='application/json')
 
 
 def restful_run() -> threading.Thread:

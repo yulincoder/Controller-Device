@@ -8,7 +8,7 @@ import time
 import MsgField
 import gevent
 import traceback
-
+import threading
 
 class Device:
     def __init__(self,
@@ -30,7 +30,16 @@ class GenericSwitcherDevice(Device):
                  sock: Union[socket.socket, None] = None,
                  is_alive: bool = True):
         super(GenericSwitcherDevice, self).__init__(sn, ip_mac, sock, is_alive)
-        self._heartbeat_msg_dict = {"sn": None}
+        self._heartbeat_msg_dict: dict = {"sn": None}
+        self._lock: threading.Lock = threading.Lock()
+
+    def _lock_acquire(self):
+        self._lock.acquire()
+
+
+    def _lock_release(self):
+        self._lock.release()
+
 
     def _build_ping_msg(self) -> str:
         self._heartbeat_msg_dict['sn'] = self.sn
@@ -79,6 +88,21 @@ class GenericSwitcherDevice(Device):
         sock_f = self.socket.makefile(mode='r', encoding='utf-8')
         data = sock_f.readline()
         return None if len(data) == 0 else data
+
+
+    def writeline(self, msg: str) -> Union[bool, int]:
+        if not isinstance(msg, str):
+            try:
+                msg = str(msg)
+            except:
+                return False
+        if msg[-1] != '\n':
+            msg += '\n'
+        sock_f = self.socket.makefile(mode='r', encoding='utf-8')
+        self._lock_acquire()
+        retval = sock_f.write(msg)
+        self._lock_release()
+        return retval
 
 
 if __name__ == '__main__':

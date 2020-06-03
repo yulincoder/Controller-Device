@@ -2,6 +2,7 @@ from gevent import monkey
 monkey.patch_all()
 import device
 from typing import Union, Dict, Tuple
+import threading
 # from multiprocessing.managers import BaseManager
 
 class DeviceSocketPool:
@@ -17,6 +18,7 @@ class DeviceSocketPool:
     def put_device(self, sn: str, d: device.Device):
         self._lock_acquire()
         self._devices[sn] = d
+        self._devices[sn].is_alive = True
         self._lock_release()
 
     def peak_device(self, sn: str) -> Union[None, device.Device]:
@@ -44,11 +46,18 @@ class DeviceSocketPool:
         else:
             return False
     
-    def msg_put_thread(self, addr: Tuple[str, int]):
+    def put_msg_safe(self, sn: str, msg: str) -> Union[bool, int]:
         """
         Post lastest msg to redis.
         """
-        pass
+        if not self.is_in_pool(sn):
+            return False
+        if not self.is_alive(sn):
+            return False
+        device = self.peak_device(sn)
+        retval = device.write(msg)
+        return retval
+
  
 
 # It is seem that Gevent confilct to multiprocessing.managers.Manager
