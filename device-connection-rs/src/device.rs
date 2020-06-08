@@ -368,7 +368,7 @@ impl DevicePool {
     }
 
     /// Query a device in the pool
-    pub fn is_in_pool(self, sn: &String) -> bool {
+    pub fn is_in_pool(&self, sn: &String) -> bool {
         self.devices.contains_key(sn)
     }
 

@@ -17,6 +17,7 @@ pub fn log_init(level: Option<&str>) -> Result<(), String> {
         env::set_var("RUST_LOG", "trace");
     }
     env::set_var("LOGE_FORMAT", "fileline");
-    loge::init();
+    //loge::init();
+    loge::init_with_file("temp.log");
     Ok(())
 }
