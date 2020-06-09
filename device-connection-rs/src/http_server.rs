@@ -1,5 +1,7 @@
 use crate::device;
-use actix_web::{get, web, App, HttpServer, Responder};
+use actix_web::{error, get, post, web, App, Error, HttpResponse, HttpServer, Responder};
+use bytes::BytesMut;
+use futures::StreamExt;
 use log::{error, info, warn};
 use std::sync::{Arc, RwLock};
 
@@ -32,6 +34,30 @@ async fn device_is_alive(
     resp
 }
 
+const MAX_SIZE: usize = 262_144;
+
+#[post("/push/get")]
+async fn push_get(mut payload: web::Payload) -> Result<HttpResponse, Error> {
+    // payload is a stream of Bytes objects
+    let mut body = BytesMut::new();
+    while let Some(chunk) = payload.next().await {
+        let chunk = chunk?;
+        // limit max size of in-memory payload
+        if (body.len() + chunk.len()) > MAX_SIZE {
+            return Err(error::ErrorBadRequest("overflow"));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    match String::from_utf8(body.to_vec()) {
+        Ok(body_string) => {
+            println!("data: {}", body_string);
+            // TODO: push the data to device!
+            Ok(HttpResponse::Ok().body(body))
+        }
+        _ => Err(error::ErrorBadRequest("invalid data")),
+    }
+}
+
 #[actix_rt::main]
 pub async fn start(devicepool: Arc<RwLock<device::DevicePool>>) -> std::io::Result<()> {
     HttpServer::new(move || {
@@ -39,6 +65,7 @@ pub async fn start(devicepool: Arc<RwLock<device::DevicePool>>) -> std::io::Resu
             .data(devicepool.clone())
             .service(query_devices_num)
             .service(query_devices_alive_num)
+            .service(push_get)
             .service(device_is_alive)
     })
     .bind("0.0.0.0:8080")?

@@ -166,7 +166,7 @@ pub fn start(devicepool: Arc<RwLock<device::DevicePool>>) {
     //let mut redis_mq = Arc::new(RwLock::new(messagequeue::MQ::new("redis://127.0.0.1").unwrap()));
 
     info!("Start listen the port");
-    let listener = if let Ok(t) = TcpListener::bind("0.0.0.0:9100") {
+    let listener = if let Ok(t) = TcpListener::bind("0.0.0.0:9200") {
         t
     } else {
         error!("Open port failed");
