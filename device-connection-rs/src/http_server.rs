@@ -1,7 +1,6 @@
 use crate::device;
 use actix_web::{get, web, App, HttpServer, Responder};
 use log::{error, info, warn};
-use std::borrow::Borrow;
 use std::sync::{Arc, RwLock};
 
 #[get("/query/devices_num")]
@@ -26,10 +25,9 @@ async fn device_is_alive(
     info: web::Path<String>,
     devicepool: web::Data<Arc<RwLock<device::DevicePool>>>,
 ) -> impl Responder {
-    let resp = format!(
-        "pool len {}, sn {}, is alive {}, is in {}, test {}",
-        pool_len, sn, is_alive, is_exist, test_is_exist
-    );
+    let sn = info;
+    let is_alive = devicepool.write().unwrap().is_alive(&sn);
+    let resp = format!("sn {}, is alive {}", sn, is_alive);
     info!("{}", resp);
     resp
 }
