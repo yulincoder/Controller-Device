@@ -35,7 +35,6 @@ async fn device_is_alive(
 }
 
 const MAX_SIZE: usize = 262_144;
-
 #[post("/push/get")]
 async fn push_get(mut payload: web::Payload) -> Result<HttpResponse, Error> {
     // payload is a stream of Bytes objects

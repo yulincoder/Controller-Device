@@ -39,7 +39,9 @@
 //!     );
 //! ```
 #![allow(dead_code)]
+use crate::messagequeue::MQ;
 use log::{error, info, warn};
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::net::TcpStream;
@@ -54,13 +56,6 @@ pub enum ReadWriteErrorCode {
     NULLSTREAM,
     DATAINVAILD,
     NULLDATA,
-}
-
-pub enum MESTYPE {
-    NULL,
-    HEARTBEAT,
-    RAWDATA,
-    INVAILD,
 }
 
 pub fn get_sn_from_string(info: String) -> String {
@@ -232,6 +227,15 @@ impl Device {
         self.is_alive
     }
 
+    /// Push online to mq
+    pub fn push_online_msg(&self, mq: &mut MQ) -> bool {
+        let msg = format!("{{ \"type\": \"online\", \"sn\": \"{}\" }}", self.sn);
+        match mq.push(msg.to_string().borrow()) {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
+
     /// set the status of alive
     pub fn activate(&mut self, stream: TcpStream) {
         self.is_alive = true;
@@ -285,26 +289,19 @@ impl Device {
         self.stream = Some(stream);
     }
 
-    /// TODO: do it.
-    pub fn is_heartbeat_msg(&self, msg: &String) -> bool {
-        true
-    }
-
-    /// TODO: do it.
-    pub fn parse_msg_type(&self, msg: &String) -> MESTYPE {
-        if self.is_heartbeat_msg(msg) {
-            MESTYPE::HEARTBEAT
-        } else {
-            MESTYPE::RAWDATA
-        }
-    }
-
     /// Response pong to device ping
-    pub fn pong_to_device(&mut self) -> bool {
-        let pong_msg = "{\"pong\":\"pong\"}".to_string();
+    pub fn echo_pong(&mut self) -> bool {
+        info!("ping to heartbeat");
+        self.update_heartbeat_timestamp_auto();
+
+        let pong_msg = "{\"type\":\"pong\"}".to_string();
         match self.writeline(pong_msg, true) {
             Ok(_) => true,
-            Err(_) => false,
+            Err(_) => {
+                warn!("pong fail");
+                self.deactivate();
+                false
+            }
         }
     }
 

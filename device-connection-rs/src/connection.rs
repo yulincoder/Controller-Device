@@ -10,6 +10,13 @@ use std::time::Duration;
 use crate::device;
 use crate::messagequeue;
 
+pub enum MESTYPE {
+    NULL,
+    HEARTBEAT,
+    RAWDATA,
+    INVAILD,
+}
+
 /// If the msg is a heartbeat ping type, return the sn
 ///
 /// # Examples
@@ -54,46 +61,21 @@ fn is_heartbeat(msg: &String) -> Option<String> {
     sn
 }
 
+/// TODO: do it.
+pub fn parse_msg_type(msg: &String) -> MESTYPE {
+    if let Some(_) = is_heartbeat(msg) {
+        MESTYPE::HEARTBEAT
+    } else {
+        MESTYPE::RAWDATA
+    }
+}
+
 #[test]
 fn is_heartbeat_test() {
     let ok_str = r#"{"type": "ping","sn": "123"}"#;
     assert_eq!(is_heartbeat(&ok_str.to_string()), Some("123".to_string()));
     let err_str = r#"{"type": "ping","what": "error"}"#;
     assert_ne!(is_heartbeat(&err_str.to_string()), Some("123".to_string()));
-}
-
-fn handle_recv_msg(device: Arc<RwLock<device::Device>>) {
-    info!("ping to heartbeat");
-    {
-        device.write().unwrap().update_heartbeat_timestamp_auto();
-    }
-    {
-        let mut pong_fail = false;
-        if device.write().unwrap().pong_to_device() == false {
-            warn!("pong fail");
-            pong_fail = true;
-        }
-        if pong_fail {
-            device.write().unwrap().deactivate();
-        }
-    }
-}
-
-#[test]
-fn handle_recv_msg_test() {
-    let device = Arc::new(RwLock::new(device::Device::new("123abc".to_string())));
-    {
-        let device_lock = device.write().unwrap();
-        assert_eq!(device_lock.get_sn(), "123abc");
-        assert_eq!(device_lock.is_alive(), true);
-    }
-    handle_recv_msg(device.clone());
-    {
-        let device_lock = device.write().unwrap();
-        assert_eq!(device_lock.get_sn(), "123abc");
-        assert_eq!(device_lock.is_alive(), false);
-        assert_eq!(device_lock.is_heartbeat_timeout(), false);
-    }
 }
 
 fn handle_client(stream: TcpStream, dsp: Arc<RwLock<device::DevicePool>>) {
@@ -112,7 +94,7 @@ fn handle_client(stream: TcpStream, dsp: Arc<RwLock<device::DevicePool>>) {
                 break;
             }
         } else if poll == 3 {
-            error!("no device");
+            error!("invalid device");
             return;
         }
         thread::sleep(Duration::from_millis(500));
@@ -130,7 +112,7 @@ fn handle_client(stream: TcpStream, dsp: Arc<RwLock<device::DevicePool>>) {
         let device_ref = dsp.write().unwrap().get_device_ref(&pinsn);
         device_ref.unwrap().write().unwrap().activate(stream);
     }
-    if let Err(_) = mq.push(&pinsn) {
+    if device.write().unwrap().push_online_msg(&mut mq) {
         error!("push a device online fail",);
         device.write().unwrap().deactivate();
         return;
@@ -159,27 +141,28 @@ fn handle_client(stream: TcpStream, dsp: Arc<RwLock<device::DevicePool>>) {
                 );
                 let msg_trim = msg.trim().to_string();
                 // Heartbeat message, update the ping timestamp.
-                let msg_t: device::MESTYPE;
-                {
-                    msg_t = device.read().unwrap().parse_msg_type(&msg);
-                }
-
+                let msg_t = parse_msg_type(&msg_trim);
                 match msg_t {
-                    device::MESTYPE::HEARTBEAT => {
-                        handle_recv_msg(device.clone());
+                    MESTYPE::HEARTBEAT => {
+                        if device.write().unwrap().echo_pong() {
+                            match mq.push(&"{offline}".to_string()) {
+                                Ok(_) => {
+                                    info!("push offline msg to MQ, sn {}", pinsn);
+                                }
+                                Err(_) => {
+                                    error!("push offline message to MQ fail, sn: {}", pinsn);
+                                }
+                            }
+                        }
                     }
-                    device::MESTYPE::RAWDATA => {
+                    MESTYPE::RAWDATA => {
                         info!("push message to mq: {}", msg);
-                        if let Err(_) = mq.push(&msg) {
+                        if let Err(_) = mq.push(&msg_trim) {
                             error!("push MQ fail: {}", msg);
                         }
                     }
-                    device::MESTYPE::INVAILD => {}
-                    device::MESTYPE::NULL => {}
-                }
-
-                if let Err(_) = mq.push(&msg_trim) {
-                    info!("fail push message to mq: {}", msg);
+                    MESTYPE::INVAILD => {}
+                    MESTYPE::NULL => {}
                 }
             }
             _ => {}
@@ -199,7 +182,7 @@ pub fn start(devicepool: Arc<RwLock<device::DevicePool>>) {
     //let mut redis_mq = Arc::new(RwLock::new(messagequeue::MQ::new("redis://127.0.0.1").unwrap()));
 
     info!("Start listen the port");
-    let listener = if let Ok(t) = TcpListener::bind("0.0.0.0:9200") {
+    let listener = if let Ok(t) = TcpListener::bind("0.0.0.0:9300") {
         t
     } else {
         error!("Open port failed");
