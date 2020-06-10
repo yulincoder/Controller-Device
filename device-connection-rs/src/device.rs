@@ -94,18 +94,13 @@ pub fn write_line(stream: &TcpStream, line: String, flush: bool) -> Result<usize
     if byte_line[byte_line.len() - 1] != 0xa {
         byte_line.push(0xa);
     }
-    error!("卡死3？");
     match writer.write_all(byte_line.as_slice()) {
         Ok(_) => {
-            error!("卡死4？");
             if flush {
-                error!("卡死5？");
                 if let Err(e) = writer.flush() {
-                    error!("卡死6？");
                     error!("flush error: {}", e);
                     return Err(String::from("Flush Error"));
                 }
-                error!("卡死6？");
             }
             Ok(byte_line.len())
         }
@@ -136,6 +131,56 @@ pub struct Device {
 
     /// The heartbeat period.
     heartbeat_period: Duration,
+}
+
+#[cfg(test)]
+mod device_tests {
+    use crate::device::Device;
+    use std::sync::{Arc, RwLock};
+    use std::thread::sleep;
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn test_device() {
+        assert_eq!(1, 1);
+    }
+
+    #[test]
+    fn test_device_set_get_sn() {
+        let mut device: Device = Device::new("sn123".to_string());
+        assert_eq!(device.get_sn(), "sn123");
+        device.set_sn("sn456".to_string());
+        assert_eq!(device.get_sn(), "sn456");
+    }
+
+    #[test]
+    fn test_device_get_alive_time() {
+        let device: Device = Device::new("sn123".to_string());
+        assert_eq!(device.get_alive_time() < Duration::from_nanos(1000), true);
+        sleep(Duration::from_secs(4));
+        assert_eq!(device.get_alive_time() >= Duration::from_secs(4), true);
+        assert_eq!(device.get_alive_time() <= Duration::from_secs(5), true);
+    }
+
+    #[test]
+    fn test_is_alive() {
+        let mut device: Device = Device::new("sn123".to_string());
+        assert_eq!(device.is_alive(), true);
+        device.deactivate();
+        assert_eq!(device.is_alive(), false);
+    }
+
+    #[test]
+    fn test_is_heartbeat_timeout() {
+        let mut device: Device = Device::new("sn123".to_string());
+        assert_eq!(device.is_heartbeat_timeout(), false);
+        assert_eq!(device.is_alive(), true);
+        device.set_heartbeat_period(Duration::from_secs(3));
+        sleep(Duration::from_secs(4));
+        assert_eq!(device.is_heartbeat_timeout(), true);
+        device.update_heartbeat_timestamp_auto();
+        assert_eq!(device.is_heartbeat_timeout(), false);
+    }
 }
 
 impl Device {
@@ -169,7 +214,7 @@ impl Device {
         self.heartbeat_period = period;
     }
 
-    /// Is over the heartbeat. At time, should send the ping/pong message.
+    /// Is over the heartbeat. At time, should send the pinqqg/pong message.
     pub fn is_heartbeat_timeout(&self) -> bool {
         if let Ok(elapsed) = self.last_heart_time.elapsed() {
             elapsed > self.heartbeat_period

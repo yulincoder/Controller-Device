@@ -11,6 +11,14 @@ use crate::device;
 use crate::messagequeue;
 
 /// If the msg is a heartbeat ping type, return the sn
+///
+/// # Examples
+/// ```
+/// let ok_str = r#"{"type": "ping","sn": "123"}"#;
+/// assert_eq!(carte::is_heartbeat(&ok_str.to_string()), Some("123".to_string()));
+/// let err_str = r#"{"type": "ping","what": "error"}"#;
+/// assert_ne!(carte::is_heartbeat(&err_str.to_string()), Some("123".to_string()));
+/// ```
 fn is_heartbeat(msg: &String) -> Option<String> {
     let sn: Option<String> = if let Ok(data) = serde_json::from_str(msg) {
         match data {
@@ -46,6 +54,14 @@ fn is_heartbeat(msg: &String) -> Option<String> {
     sn
 }
 
+#[test]
+fn is_heartbeat_test() {
+    let ok_str = r#"{"type": "ping","sn": "123"}"#;
+    assert_eq!(is_heartbeat(&ok_str.to_string()), Some("123".to_string()));
+    let err_str = r#"{"type": "ping","what": "error"}"#;
+    assert_ne!(is_heartbeat(&err_str.to_string()), Some("123".to_string()));
+}
+
 fn handle_recv_msg(device: Arc<RwLock<device::Device>>) {
     info!("ping to heartbeat");
     {
@@ -54,12 +70,29 @@ fn handle_recv_msg(device: Arc<RwLock<device::Device>>) {
     {
         let mut pong_fail = false;
         if device.write().unwrap().pong_to_device() == false {
-            info!("pong fail");
+            warn!("pong fail");
             pong_fail = true;
         }
         if pong_fail {
             device.write().unwrap().deactivate();
         }
+    }
+}
+
+#[test]
+fn handle_recv_msg_test() {
+    let device = Arc::new(RwLock::new(device::Device::new("123abc".to_string())));
+    {
+        let device_lock = device.write().unwrap();
+        assert_eq!(device_lock.get_sn(), "123abc");
+        assert_eq!(device_lock.is_alive(), true);
+    }
+    handle_recv_msg(device.clone());
+    {
+        let device_lock = device.write().unwrap();
+        assert_eq!(device_lock.get_sn(), "123abc");
+        assert_eq!(device_lock.is_alive(), false);
+        assert_eq!(device_lock.is_heartbeat_timeout(), false);
     }
 }
 
