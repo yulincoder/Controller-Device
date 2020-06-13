@@ -39,6 +39,7 @@
 //!     );
 //! ```
 #![allow(dead_code)]
+use crate::connection;
 use crate::messagequeue::MQ;
 use log::{error, info, warn};
 use std::borrow::Borrow;
@@ -47,6 +48,7 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::net::TcpStream;
 use std::ops::Deref;
 use std::sync::{Arc, RwLock};
+use std::thread;
 use std::time::{Duration, SystemTime};
 
 pub enum ReadWriteErrorCode {
@@ -187,7 +189,7 @@ impl Device {
             born_time: SystemTime::now(),
             is_alive: true,
             last_heart_time: SystemTime::now(),
-            heartbeat_period: Duration::from_secs(30),
+            heartbeat_period: Duration::from_secs(90),
         }
     }
 
@@ -199,7 +201,7 @@ impl Device {
             born_time: born_time,
             is_alive: true,
             last_heart_time: born_time.clone(),
-            heartbeat_period: Duration::from_secs(30),
+            heartbeat_period: Duration::from_secs(90),
         }
     }
 
@@ -228,11 +230,11 @@ impl Device {
     }
 
     /// Push online to mq
-    pub fn push_online_msg(&self, mq: &mut MQ) -> bool {
+    pub fn push_online_msg(&self, mq: &mut MQ) -> Result<(), ()> {
         let msg = format!("{{ \"type\": \"online\", \"sn\": \"{}\" }}", self.sn);
         match mq.push(msg.to_string().borrow()) {
-            Ok(_) => true,
-            Err(_) => false,
+            Ok(_) => Ok(()),
+            Err(_) => Err(()),
         }
     }
 
@@ -245,6 +247,7 @@ impl Device {
 
     // disable a device
     pub fn deactivate(&mut self) {
+        warn!("deactive device({})", self.get_sn());
         self.is_alive = false;
         self.stream = None;
     }
@@ -282,6 +285,7 @@ impl Device {
     ///  Update the last heartbeat time with auto padding
     pub fn update_heartbeat_timestamp_auto(&mut self) {
         self.update_heartbeat_timestamp(SystemTime::now());
+        info!("update the heartbeat timestamp {:?}", self.last_heart_time);
     }
 
     /// Set a Stream to device
@@ -290,17 +294,15 @@ impl Device {
     }
 
     /// Response pong to device ping
-    pub fn echo_pong(&mut self) -> bool {
-        info!("ping to heartbeat");
-        self.update_heartbeat_timestamp_auto();
-
+    pub fn echo_pong(&mut self) -> Result<(), ()> {
+        info!("ping from the device({})", self.get_sn());
         let pong_msg = "{\"type\":\"pong\"}".to_string();
         match self.writeline(pong_msg, true) {
-            Ok(_) => true,
+            Ok(_) => Ok(()),
             Err(_) => {
-                warn!("pong fail");
+                warn!("pong fail, deactivate the device");
                 self.deactivate();
-                false
+                Err(())
             }
         }
     }
@@ -321,8 +323,7 @@ impl Device {
             Some(stream) => {
                 let mut writer: BufWriter<&TcpStream> = BufWriter::new(&stream);
                 match writer.write_all(byte_line.as_slice()) {
-                    Ok(o) => {
-                        info!("writeline: {:?}", o);
+                    Ok(_) => {
                         if flush {
                             if let Err(e) = writer.flush() {
                                 error!("flush error with sn({}): {:?}", self.sn, e);
@@ -331,10 +332,16 @@ impl Device {
                         }
                         Ok(byte_line.len())
                     }
-                    _ => Err(ReadWriteErrorCode::CONNECTIONBROKEN),
+                    _ => {
+                        error!("connection broken: {}", self.sn);
+                        Err(ReadWriteErrorCode::CONNECTIONBROKEN)
+                    }
                 }
             }
-            None => Err(ReadWriteErrorCode::NULLSTREAM),
+            None => {
+                error!("No stream: {}", self.sn);
+                Err(ReadWriteErrorCode::NULLSTREAM)
+            }
         }
     }
 
@@ -362,6 +369,37 @@ impl Device {
             }
             None => Err(ReadWriteErrorCode::NULLSTREAM),
         }
+    }
+
+    ///
+    /// That api can only be used at Web API.
+    pub fn readline_timeout(&mut self, timeout: usize) -> Result<String, ReadWriteErrorCode> {
+        let mut err = ReadWriteErrorCode::NULLDATA;
+        // try to read every 0.5s
+        for _ in 0..(timeout * 2) {
+            match self.readline() {
+                Ok(msg) => match connection::parse_msg_type(&msg) {
+                    connection::MESTYPE::HEARTBEAT => {
+                        if let Ok(_) = self.echo_pong() {
+                            info!("get the heartbeat data: {}", msg);
+                            self.update_heartbeat_timestamp_auto();
+                        }
+                    }
+                    connection::MESTYPE::RAWDATA => {
+                        info!("get the rawdata: {}", msg);
+                        return Ok(msg);
+                    }
+                    connection::MESTYPE::INVAILD => {
+                        warn!("get the invalid data: {}", msg);
+                    }
+                },
+                Err(e) => {
+                    err = e;
+                }
+            }
+            thread::sleep(Duration::from_millis(500));
+        }
+        Err(err)
     }
 }
 

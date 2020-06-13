@@ -1,3 +1,4 @@
+use crate::connection;
 use crate::device;
 use actix_web::{error, get, post, web, App, Error, HttpResponse, HttpServer, Responder};
 use bytes::BytesMut;
@@ -35,8 +36,11 @@ async fn device_is_alive(
 }
 
 const MAX_SIZE: usize = 262_144;
-#[post("/push/get")]
-async fn push_get(mut payload: web::Payload) -> Result<HttpResponse, Error> {
+#[post("/push/push_msg")]
+async fn push_get(
+    mut payload: web::Payload,
+    devicepool: web::Data<Arc<RwLock<device::DevicePool>>>,
+) -> Result<HttpResponse, Error> {
     // payload is a stream of Bytes objects
     let mut body = BytesMut::new();
     while let Some(chunk) = payload.next().await {
@@ -47,13 +51,50 @@ async fn push_get(mut payload: web::Payload) -> Result<HttpResponse, Error> {
         }
         body.extend_from_slice(&chunk);
     }
+
     match String::from_utf8(body.to_vec()) {
         Ok(body_string) => {
             println!("data: {}", body_string);
-            // TODO: push the data to device!
-            Ok(HttpResponse::Ok().body(body))
+            let sn = if let Some(sn) = connection::parse_sn(&body_string) {
+                sn
+            } else {
+                warn!("invaild request, have no sn field");
+                return Err(error::ErrorBadRequest("have no sn field"));
+            };
+            info!("push get device({})", sn);
+
+            let mut dsp_lock = devicepool.write().unwrap();
+
+            if dsp_lock.is_alive(&sn) == false || dsp_lock.is_in_pool(&sn) == false {
+                return Err(error::ErrorBadRequest("device offline"));
+            }
+
+            match dsp_lock.get_device_ref(&sn) {
+                Some(device_lock) => {
+                    drop(dsp_lock); // unlock the devicepool lock
+                    let mut device = device_lock.write().unwrap();
+                    match device.writeline(body_string.clone(), true) {
+                        Ok(_) => {
+                            info!(
+                                "send message: '{}' to device({})",
+                                body_string,
+                                device.get_sn()
+                            );
+                            if let Ok(resp) = device.readline_timeout(5) {
+                                return Ok(HttpResponse::Ok().body(resp));
+                            } else {
+                                return Err(error::ErrorBadRequest("no response"));
+                            }
+                        }
+                        Err(_) => {
+                            return Err(error::ErrorBadRequest("send message fail"));
+                        }
+                    }
+                }
+                _ => return Err(error::ErrorBadRequest("device offline")),
+            }
         }
-        _ => Err(error::ErrorBadRequest("invalid data")),
+        _ => return Err(error::ErrorBadRequest("invalid data")),
     }
 }
 
