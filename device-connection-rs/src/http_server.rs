@@ -62,7 +62,10 @@ async fn push_get(
         let chunk = chunk?;
         // limit max size of in-memory payload
         if (body.len() + chunk.len()) > MAX_SIZE {
-            return Err(error::ErrorBadRequest("overflow"));
+            return Err(error::ErrorBadRequest(json!({
+                    "namespace": "/push/push_msg",
+                    "error": "overflow"
+                })));
         }
         body.extend_from_slice(&chunk);
     }
