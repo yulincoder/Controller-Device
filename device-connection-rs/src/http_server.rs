@@ -7,6 +7,15 @@ use log::{info, warn};
 use serde_json::json;
 use std::sync::{Arc, RwLock};
 
+#[get("/query/service_version")]
+async fn query_service_version() -> Result<HttpResponse, Error> {
+    let resp = json!({
+        "namespace": "/query/service_version",
+        "value": "v0.8.0-20200626a",
+    });
+    Ok(HttpResponse::Ok().body(resp))
+}
+
 #[get("/query/devices_num")]
 async fn query_devices_num(
     devicepool: web::Data<Arc<RwLock<device::DevicePool>>>,
@@ -151,6 +160,7 @@ pub async fn start(devicepool: Arc<RwLock<device::DevicePool>>) -> std::io::Resu
             .service(query_devices_alive_num)
             .service(push_get)
             .service(device_is_alive)
+            .service(query_service_version)
     })
     .bind("0.0.0.0:8080")?
     .run()
