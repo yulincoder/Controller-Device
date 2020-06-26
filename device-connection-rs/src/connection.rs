@@ -227,6 +227,7 @@ fn handle_client(stream: TcpStream, dsp: Arc<RwLock<device::DevicePool>>) {
                 let msg_t = parse_msg_type(&msg_trim);
                 match msg_t {
                     MESTYPE::HEARTBEAT => {
+                        info!("heartbeat type");
                         let mut device_lock = device.write().unwrap();
                         if let Err(_) = device_lock.echo_pong() {
                             warn!("echo pong the device fail");
@@ -235,6 +236,7 @@ fn handle_client(stream: TcpStream, dsp: Arc<RwLock<device::DevicePool>>) {
                         }
                     }
                     MESTYPE::RAWDATA => {
+                        info!("rawdata type");
                         info!("push message to mq: {}", msg);
                         device.write().unwrap().update_heartbeat_timestamp_auto();
                         if let Err(_) = mq.push(&msg_trim) {

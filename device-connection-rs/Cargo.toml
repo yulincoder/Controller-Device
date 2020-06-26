@@ -12,9 +12,9 @@ loge = {version = "^0.4.2", features = ["file"]}
 redis = "0.16.0"
 actix-web = "2.0"
 actix-rt = ">=1"
-serde_json = "1.0"
-serde = "1.0.111"
+serde_json = "1.0.2"
+serde = {version = "1.0.111", features = ["derive"]}
 bytes = "0.5.4"
 futures = "0.3.5"
-# tokio = { versio = ">=0.2", features = ["full"] }
+tokio = { versio = ">=0.2", features = ["full"] }
 

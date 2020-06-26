@@ -1,38 +1,53 @@
 use crate::connection;
 use crate::device;
-use actix_web::{error, get, post, web, App, Error, HttpResponse, HttpServer, Responder};
+use actix_web::{error, get, post, web, App, Error, HttpResponse, HttpServer};
 use bytes::BytesMut;
 use futures::StreamExt;
-use log::{error, info, warn};
+use log::{info, warn};
 use std::sync::{Arc, RwLock};
+use serde_json::json;
 
 #[get("/query/devices_num")]
 async fn query_devices_num(
     devicepool: web::Data<Arc<RwLock<device::DevicePool>>>,
-) -> impl Responder {
-    format!("device: {}", devicepool.read().unwrap().get_devices_num())
+) -> Result<HttpResponse, Error> {
+    let resp = json!({
+        "namespace": "/query/devices_num".to_string(),
+        "value": format!("{}", devicepool.read().unwrap().get_devices_num()),
+    });
+    Ok(HttpResponse::Ok().body(resp))
 }
 
 #[get("/query/devices_alive_num")]
 async fn query_devices_alive_num(
     devicepool: web::Data<Arc<RwLock<device::DevicePool>>>,
-) -> impl Responder {
-    format!(
-        "device: {}",
-        devicepool.read().unwrap().get_alive_devices_num()
-    )
+) -> Result<HttpResponse, Error> {
+    let resp = json!({
+        "namespace": "/query/device_alive_num",
+        "value": format!("{}", devicepool.read().unwrap().get_alive_devices_num()),
+    });
+    Ok(HttpResponse::Ok().body(resp))
 }
 
 #[get("/query/device_is_alive/{sn}")]
 async fn device_is_alive(
     info: web::Path<String>,
     devicepool: web::Data<Arc<RwLock<device::DevicePool>>>,
-) -> impl Responder {
-    let sn = info;
+) -> Result<HttpResponse, Error> {
+    let sn = info.to_string();
     let is_alive = devicepool.write().unwrap().is_alive(&sn);
-    let resp = format!("sn {}, is alive {}", sn, is_alive);
-    info!("{}", resp);
-    resp
+
+    let resp = json!({
+    "namespace": "/query/device_is_alive",
+    "sn": sn,
+    "value": if is_alive {
+            "online".to_string()
+        } else {
+            "offline".to_string()
+        },
+    });
+
+    Ok(HttpResponse::Ok().body(resp))
 }
 
 const MAX_SIZE: usize = 262_144;
@@ -59,14 +74,20 @@ async fn push_get(
                 sn
             } else {
                 warn!("invaild request, have no sn field");
-                return Err(error::ErrorBadRequest("have no sn field"));
+                return Err(error::ErrorBadRequest(json!({
+                    "namespace": "/push/push_msg",
+                    "error": "have no sn field"
+                })));
             };
             info!("push get device({})", sn);
 
             let mut dsp_lock = devicepool.write().unwrap();
 
             if dsp_lock.is_alive(&sn) == false || dsp_lock.is_in_pool(&sn) == false {
-                return Err(error::ErrorBadRequest("device offline"));
+                return Err(error::ErrorBadRequest(json!({
+                    "namespace": "/push/push_msg",
+                    "error": "device offline"
+                })));
             }
 
             match dsp_lock.get_device_ref(&sn) {
@@ -80,21 +101,41 @@ async fn push_get(
                                 body_string,
                                 device.get_sn()
                             );
-                            if let Ok(resp) = device.readline_timeout(5) {
+                            if let Ok(rawdata) = device.readline_timeout(5) {
+                                let resp = json!({
+                                    "namespace": "/push/push_msg",
+                                    "value":  rawdata
+                                });
                                 return Ok(HttpResponse::Ok().body(resp));
                             } else {
-                                return Err(error::ErrorBadRequest("no response"));
+                                return Err(error::ErrorBadRequest(json!({
+                                    "namespace": "/push/push_msg",
+                                    "error": "no response"
+                                })));
                             }
                         }
                         Err(_) => {
-                            return Err(error::ErrorBadRequest("send message fail"));
+                            return Err(error::ErrorBadRequest(json!({
+                                "namespace": "/push/push_msg",
+                                "error": "send message fail"
+                            })));
                         }
                     }
                 }
-                _ => return Err(error::ErrorBadRequest("device offline")),
+                _ => {
+                    return Err(error::ErrorBadRequest(json!({
+                          "namespace": "/push/push_msg",
+                          "error": "device offline"
+                    })))
+                }
             }
         }
-        _ => return Err(error::ErrorBadRequest("invalid data")),
+        _ => {
+            return Err(error::ErrorBadRequest(json!({
+                  "namespace": "/push/push_msg",
+                  "error": "invalid data"
+            })))
+        }
     }
 }
 
