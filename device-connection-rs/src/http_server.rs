@@ -4,8 +4,8 @@ use actix_web::{error, get, post, web, App, Error, HttpResponse, HttpServer};
 use bytes::BytesMut;
 use futures::StreamExt;
 use log::{info, warn};
-use std::sync::{Arc, RwLock};
 use serde_json::json;
+use std::sync::{Arc, RwLock};
 
 #[get("/query/devices_num")]
 async fn query_devices_num(
@@ -63,9 +63,9 @@ async fn push_get(
         // limit max size of in-memory payload
         if (body.len() + chunk.len()) > MAX_SIZE {
             return Err(error::ErrorBadRequest(json!({
-                    "namespace": "/push/push_msg",
-                    "error": "overflow"
-                })));
+                "namespace": "/push/push_msg",
+                "error": "overflow"
+            })));
         }
         body.extend_from_slice(&chunk);
     }
