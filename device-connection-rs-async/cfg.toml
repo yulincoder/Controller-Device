@@ -1,0 +1,26 @@
+[log]
+level = "trace" # trace, debug, info, warn, error, none
+outfile = "log.log"
+format = "fileline" # fileline, target, json
+
+[perception_service]
+ip = "127.0.0.1"
+port = "8080"
+
+[application_service]
+ip = "127.0.0.1"
+port = "8000"
+
+[redis]
+ip = "127.0.0.1"
+port = "6379"
+
+[middleware]
+redis_cluster = ["", ""]
+port = ""
+
+[alarm]
+edge_trigger = ["error", "warn"]
+notifymails = ["paradoxt@gmail.com"]
+
+
