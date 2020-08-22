@@ -1,6 +1,6 @@
 import hashlib
 import string
-
+import time
 
 def md5(s: str, encode="utf-8") -> str:
     md = hashlib.md5()
@@ -52,21 +52,21 @@ if __name__ == '__main__':
 
     print('''
         ---------------------------------------
-        单控开关: B0
-        双控开关: C1
-        三控开关: D2
-        单控带温湿度: E3
-        双控带温湿度: F4
-        三控带温湿度: G5
+        一路控制器+手动开关+信号输入+定时功能: A0A
+        一路控制器+手动开关+信号输入+定时功能+温湿度: A0B
+        两路控制器+2路手动开关+定时功能: A1C
+        两路控制器+2路手动开关+信号输入+定时功能+温湿度: A1D
+        四路控制器+4路手动开关+定时功能+ 温湿度+信号输入: A2E
         ---------------------------------------''')
 
     product_id = input("        输入产品ID# ")
-    assert product_id in ['B0', 'C1', 'D2', 'E3', 'F4', 'G5'], '错误的ID'
+    assert product_id in ['A0A', 'A0B', 'A1C', 'A1D', 'A2E'], '错误的ID'
 
-    with open('salted_sn.csv', 'w') as f:
+    csv = f'salted_sn-{time.time()}.csv'
+    with open(csv, 'w+') as f:
         generate_s(product_id, year, month, day,
                    serial_start, serial_end, 'Controller', f)
-    print('''
+    print(f'''
         -------------------------------------
-        输出到salted_sn.csv
+        输出到{csv}
         ''')
