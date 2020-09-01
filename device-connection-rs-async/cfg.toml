@@ -19,6 +19,9 @@ port = "6379"
 redis_cluster = ["", ""]
 port = ""
 
+[device]
+heartbeat_interval = "120"
+
 [alarm]
 edge_trigger = ["error", "warn"]
 notifymails = ["paradoxt@gmail.com"]
