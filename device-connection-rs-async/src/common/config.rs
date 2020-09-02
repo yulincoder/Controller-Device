@@ -38,6 +38,7 @@ pub struct LogConfig {
 pub struct PerceptionServiceConfig {
     pub ip: Option<String>,
     pub port: Option<String>,
+    pub heartbeat_interval: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -124,12 +125,16 @@ pub fn load_config(toml_path: &str, verbose: bool) -> Config {
             "Null".to_string()
         });
 
-        println!("[perception connection]: \n\tip = {:?}\n\tport = {:?}", if let Some(e) = &config.perception_service.ip {
+        println!("[perception connection]: \n\tip = {:?}\n\tport = {:?}\n\theartbeat_interval = {:?}", if let Some(e) = &config.perception_service.ip {
             e.clone()
         } else {
             "Null".to_string()
         }, if let Some(e) = &config.perception_service.port {
             e.clone()
+        } else {
+            "Null".to_string()
+        }, if let Some(e) = &config.perception_service.heartbeat_interval {
+            format!("{}", &e)
         } else {
             "Null".to_string()
         });
