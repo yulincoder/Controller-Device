@@ -6,3 +6,4 @@
 pub mod connection;
 pub mod device;
 pub mod map2redis;
+mod test;

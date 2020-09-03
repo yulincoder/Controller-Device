@@ -1,11 +1,11 @@
 [log]
-level = "trace" # trace, debug, info, warn, error, none
+level = "error" # trace, debug, info, warn, error, none
 outfile = "log.log"
 format = "fileline" # fileline, target, json
 
 [perception_service]
 ip = "127.0.0.1"
-port = "8080"
+port = "8000"
 heartbeat_interval = 90 # Seconds
 
 [application_service]
