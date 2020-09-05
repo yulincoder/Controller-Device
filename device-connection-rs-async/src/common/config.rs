@@ -16,12 +16,13 @@
 //! ```
 //!
 
-use toml;
-use serde_derive::Deserialize;
-use std::fs::{File};
-use std::io::Read;
 use std::env;
+use std::fs::File;
+use std::io::Read;
+
 use loge;
+use serde_derive::Deserialize;
+use toml;
 
 #[derive(Deserialize)]
 #[derive(Debug)]
@@ -38,7 +39,7 @@ pub struct LogConfig {
 pub struct PerceptionServiceConfig {
     pub ip: Option<String>,
     pub port: Option<String>,
-    pub heartbeat_interval: Option<u32>,
+    pub heartbeat_interval: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -75,7 +76,7 @@ pub fn log_init(log_cfg: LogConfig) {
     let format: Option<String> = log_cfg.format;
     match &level {
         Some(le) if le == &"none".to_string() => {
-            return
+            return;
         }
         _ => {
             if let Some(le) = level {
@@ -98,7 +99,7 @@ pub fn log_init(log_cfg: LogConfig) {
 #[allow(dead_code)]
 pub fn load_config(toml_path: &str, verbose: bool) -> Config {
     let mut file = File::open(toml_path).unwrap();
-    let mut file_content  = String::new();
+    let mut file_content = String::new();
     if let Err(_) = file.read_to_string(&mut file_content) {
         panic!("read config error")
     }

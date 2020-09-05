@@ -1,5 +1,13 @@
+use std::time::{
+    Duration,
+    SystemTime,
+    SystemTimeError,
+};
+
+#[allow(unused_imports)]
 use log::{
-    info
+    error,
+    info,
 };
 #[allow(unused_imports)]
 use tokio::{
@@ -7,12 +15,6 @@ use tokio::{
     net::TcpStream,
     stream::StreamExt,
     time};
-
-use std::time::{
-    SystemTime,
-    Duration,
-    SystemTimeError
-};
 
 pub struct Device {
     pub sn: String,
@@ -27,13 +29,15 @@ pub struct Device {
 #[allow(dead_code)]
 impl Device {
     pub fn new(sn: String) -> Device {
-        Device {
+        let device = Device {
             sn,
             stream: None,
             born_time: SystemTime::now(),
             alive: true,
             last_heartbeat_time: SystemTime::now(),
-            heartbeat_period: Duration::from_secs(120)}
+            heartbeat_period: Duration::from_secs(120),
+        };
+        device
     }
 
     pub fn set_heartbeat_period(&mut self, period: Duration) {
@@ -69,16 +73,17 @@ impl Device {
     }
 }
 
-
 #[cfg(test)]
 mod device_test {
-    use crate::perception_service::device::Device;
     use std::thread;
+
     use tokio::time::Duration;
+
+    use crate::perception_service::device::Device;
 
     #[test]
     fn test_is_alive_update() {
-        let mut device =  Device::new("D81234545".to_string());
+        let mut device = Device::new("D81234545".to_string());
         device.set_heartbeat_period(Duration::from_secs(3));
         thread::sleep(Duration::from_secs(2));
         assert_eq!(true, device.is_alive_update());
@@ -88,10 +93,10 @@ mod device_test {
 
     #[test]
     fn test_online_time() {
-        let device =  Device::new("D81234545".to_string());
+        let device = Device::new("D81234545".to_string());
         thread::sleep(Duration::from_secs(2));
         assert_eq!(true,
                    device.online_time().unwrap() < Duration::from_millis(2050)
-                   && device.online_time().unwrap() > Duration::from_millis(1950));
+                       && device.online_time().unwrap() > Duration::from_millis(1950));
     }
 }

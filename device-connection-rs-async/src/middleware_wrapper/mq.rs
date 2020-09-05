@@ -1,9 +1,7 @@
 //!
 //! 基于Redis lpush/rpop操作的MQ
 //!
-use log::{
-    error,
-};
+use log::error;
 
 use super::redis_wrapper::RedisConn;
 
@@ -14,15 +12,14 @@ pub struct MQ {
 
 #[allow(dead_code)]
 impl MQ {
-
     /// 获取一个MQ的连接，当前是redis连接
     pub async fn new(ip: &str, port: &str) -> Result<MQ, ()> {
         match RedisConn::new(ip, port).await {
-            Ok(conn) => Ok(MQ{ redis_conn: conn, default_priority: String::from("p5")}),
+            Ok(conn) => Ok(MQ { redis_conn: conn, default_priority: String::from("p5") }),
             Err(e) => {
                 error!("cannot create connection to redis: {:?}", e);
                 Err(())
-            },
+            }
         }
     }
 

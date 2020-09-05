@@ -1,33 +1,36 @@
 extern crate test;
 
 #[allow(unused_imports)]
-use redis::{
-    Client,
-    RedisResult,
-    AsyncCommands,
-    aio::Connection,
-};
-#[allow(unused_imports)]
 use test::Bencher;
 
 #[allow(unused_imports)]
 use futures::{
     executor::block_on,
 };
+#[allow(unused_imports)]
+use redis::{
+    aio::Connection,
+    AsyncCommands,
+    Client,
+    RedisResult,
+};
 
 /// redis基本测试
 #[cfg(test)]
 mod test_redis_conn {
-    use crate::middleware_wrapper::redis_wrapper::RedisConn;
-    use futures::executor::block_on;
-        use crate::config;
-    use super::Bencher;
     use std::borrow::Borrow;
+
+    use futures::executor::block_on;
+
+    use crate::config;
+    use crate::middleware_wrapper::redis_wrapper::RedisConn;
+
+    use super::Bencher;
 
     /// 测试redis连接->set值->get值
     #[test]
     fn test_set_get() {
-        let config: config::Config  = config::load_config("cfg.toml", true);
+        let config: config::Config = config::load_config("cfg.toml", true);
         let redis_conn = block_on(RedisConn::new(&config.redis.ip.unwrap(), &config.redis.port.unwrap()));
         let mut conn = if let Ok(instance) = redis_conn {
             instance
@@ -53,7 +56,7 @@ mod test_redis_conn {
     /// 测试redis队列push->pop
     #[test]
     fn test_push_pop() {
-        let config: config::Config  = config::load_config("cfg.toml", true);
+        let config: config::Config = config::load_config("cfg.toml", true);
         let redis_conn = block_on(RedisConn::new(&config.redis.ip.unwrap(), &config.redis.port.unwrap()));
         let mut conn = if let Ok(instance) = redis_conn {
             instance
@@ -83,8 +86,8 @@ mod test_redis_conn {
 
     #[bench]
     fn bench_redis_conn_new(b: &mut Bencher) {
-        let config: config::Config  = config::load_config("cfg.toml", true);
-        b.iter( || {
+        let config: config::Config = config::load_config("cfg.toml", true);
+        b.iter(|| {
             let redis_conn = block_on(RedisConn::new(&config.redis.ip.borrow().as_ref().unwrap(), &config.redis.port.borrow().as_ref().unwrap()));
             if redis_conn.is_err() {
                 assert!(false);
@@ -95,16 +98,19 @@ mod test_redis_conn {
 
 #[cfg(test)]
 mod test_mq {
-    use super::super::mq::MQ;
-    use futures::executor::block_on;
-    use crate::config;
-    use super::Bencher;
     use std::borrow::Borrow;
+
+    use futures::executor::block_on;
+
+    use crate::config;
+
+    use super::Bencher;
+    use super::super::mq::MQ;
 
     /// 测试队列push->pop
     #[test]
     fn test_push_pop() {
-        let config: config::Config  = config::load_config("cfg.toml", true);
+        let config: config::Config = config::load_config("cfg.toml", true);
         let mq_conn = block_on(MQ::new(&config.redis.ip.unwrap(), &config.redis.port.unwrap()));
         let mut mq = if let Ok(instance) = mq_conn {
             instance
@@ -130,10 +136,10 @@ mod test_mq {
     /// 基准测试队列push
     #[bench]
     fn bench_mq_conn_new(b: &mut Bencher) {
-        let config: config::Config  = config::load_config("cfg.toml", true);
-        b.iter( || {
+        let config: config::Config = config::load_config("cfg.toml", true);
+        b.iter(|| {
             let mq_conn = block_on(MQ::new(&config.redis.ip.borrow().as_ref().unwrap(), &config.redis.port.borrow().as_ref().unwrap()));
-            if  mq_conn.is_err() {
+            if mq_conn.is_err() {
                 assert!(false);
             };
         });

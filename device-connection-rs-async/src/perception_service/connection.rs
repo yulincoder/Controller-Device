@@ -1,24 +1,27 @@
-use log::{info, warn, error};
-
+use log::{error, info, warn};
+use serde_json;
+use serde_json::Value;
 use tokio::{
+    io::BufReader,
+    io::BufWriter,
+    net::tcp::ReadHalf,
+    net::tcp::WriteHalf,
     net::TcpListener,
     net::TcpStream,
+    prelude::*,
+    runtime,
     stream::StreamExt,
     time::Duration,
     time::timeout,
-    runtime,
-    io::BufReader,
-    net::tcp::ReadHalf,
-    io::BufWriter,
-    net::tcp::WriteHalf,
-    prelude::*,
 };
 
-use serde_json;
-use serde_json::Value;
+use tcp_err::ServerError;
 
-use crate::common::config::PerceptionServiceConfig as connCfg;
-use crate::perception_service::device::{Device};
+use crate::common::config::PerceptionServiceConfig as PerceptCfg;
+use crate::common::config::RedisConfig as RedisCfg;
+use crate::perception_service::map2redis;
+
+use super::device;
 
 mod tcp_err {
     #[derive(Debug)]
@@ -26,8 +29,6 @@ mod tcp_err {
         Broken,
     }
 }
-
-use tcp_err::ServerError;
 
 #[derive(Debug, PartialEq)]
 pub enum MESTYPE {
@@ -186,8 +187,9 @@ async fn readline<'a>(stream: &'a mut BufReader<ReadHalf<'_>>) -> Result<String,
     }
 }
 
+/// 握手成功返回sn
 async fn handshake<'a>(reader: &'a mut BufReader<ReadHalf<'_>>) -> Result<String, ()> {
-    let mut pinsn: String;
+    let pinsn: String;
     for _ in 0..4 {
         if let Ok(msg) = readline(reader).await {
             if let Some(sn) = is_heartbeat(&msg) {
@@ -196,42 +198,78 @@ async fn handshake<'a>(reader: &'a mut BufReader<ReadHalf<'_>>) -> Result<String
                 return Ok(pinsn);
             }
         }
-        tokio::time::delay_for(Duration::from_millis(100));
+        tokio::time::delay_for(Duration::from_millis(100)).await;
     }
     error!("invalid device");
     Err(())
 }
 
 /// 连接处理Handler
-async fn handler(mut stream: TcpStream, hb_interval: u32) {
-    let mut read_str = String::new();
+async fn handler(mut stream: TcpStream, hb_interval: u64, redis_cfg: RedisCfg) {
     let (mut stream_read, mut stream_write) = stream.split();
     let mut stream_reader: BufReader<ReadHalf<'_>> = BufReader::new(stream_read);
-    let mut stream_writer: BufWriter<WriteHalf<'_>> = BufWriter::new(stream_write);
+    // let mut stream_writer: BufWriter<WriteHalf<'_>> = BufWriter::new(stream_write);
 
-    // 等待新连接4s上报sn信息，超时退出
-    let sn = if let Ok(Ok(v)) = timeout(Duration::from_millis(4000), handshake(&mut stream_reader)).await {
+    // 等待新连接40s上报sn信息，超时退出(40s来自并发测试，当瞬间发起大量连接时，从os层面无法及时将这些数据上报到应用层)
+    let sn = if let Ok(Ok(v)) = timeout(Duration::from_millis(40000), handshake(&mut stream_reader)).await {
         v
     } else {
         error!("invalid sn connection");
-        return
+        return;
     };
 
     // 创建设备
-    // do something
+    let mut dev = device::Device::new(sn.clone());
+    dev.set_heartbeat_period(Duration::from_secs(hb_interval));
+
+    // 创建映射到redis的设备
+    let mut dev2redis: map2redis::Device2redis;
+
+
+    if let (Some(ip), Some(port)) = (&redis_cfg.ip, &redis_cfg.port) {
+        if let Ok(v) = map2redis::Device2redis::new(dev, ip, port).await {
+            dev2redis = v;
+        } else {
+            error!("create dev2redis instance fail");
+            return;
+        }
+    } else {
+        error!("have no redis config info");
+        return;
+    }
+
+    // 激活设备，包括向redis添加设备上线信息
+    println!("device: {:?}", dev2redis.dev.sn);
+    if !dev2redis.activate().await {
+        error!("activated device({}) fail", dev2redis.dev.sn);
+        if !dev2redis.deactivate().await {
+            error!("deactivated device({}) fail", dev2redis.dev.sn);
+        }
+        return;
+    }
 
     // 循环处理设备消息
     loop {
-        match readline(&mut stream_reader).await {
-            Ok(v) => println!("echo: {}", v),
-            _ => {}
+        tokio::select! {
+            read_up = readline(&mut stream_reader) => {
+                if let Ok(v) = read_up {
+                    println!("up msg: {}", v);
+                }
+            }
+           // TODO: 这里需要优化，读redis即使没有值也是Ready状态(返回Err), 因此改async函数总是被调度
+           // 所以对CPU的占用非常高?
+           result = dev2redis.readline_downlink() => {
+               if let Ok(msg) = result {
+                   println!("down msg: {:?}", msg);
+               }
+           }
         }
         tokio::time::delay_for(Duration::from_millis(100)).await;
     }
 }
 
 /// 监听端口，派发连接
-fn coroutines_start(ip: String, port: String, hb_interval: u32) -> Result<(), Box<dyn std::error::Error>> {
+fn coroutines_start(ip: String, port: String, hb_interval: u64, redis_cfg: RedisCfg) -> Result<(), Box<dyn std::error::Error>> {
 
     // 创建调度器
     let mut rt = runtime::Builder::new()
@@ -258,10 +296,11 @@ fn coroutines_start(ip: String, port: String, hb_interval: u32) -> Result<(), Bo
         //while let Some(stream) = incoming.next().await {
         loop {
             match incoming.next().await {
-                Some(Ok(mut stream)) => {
+                Some(Ok(stream)) => {
                     info!("coming a connection");
+                    let redis_cfg_move = redis_cfg.clone();
                     tokio::spawn(async move {
-                        handler(stream, hb_interval).await;
+                        handler(stream, hb_interval, redis_cfg_move).await;
                     });
                 }
                 e => error!("{:?}", e),
@@ -273,19 +312,25 @@ fn coroutines_start(ip: String, port: String, hb_interval: u32) -> Result<(), Bo
 }
 
 /// 启动设备连接服务
-pub fn start(conncfg: connCfg) -> Result<(), ()> {
-    info!("{:?}", conncfg);
-    println!("Device Connection Start with config {:?}", conncfg);
+pub fn start(perceptioncfg: PerceptCfg, rediscfg: RedisCfg) -> Result<(), ()> {
+    info!("{:?}", perceptioncfg);
+    println!("Device Connection Start with config {:?}", perceptioncfg);
 
-    let ip = conncfg.ip.clone().unwrap();
-    let port = conncfg.port.clone().unwrap();
+    let ip = perceptioncfg.ip.clone().unwrap();
+    let port = perceptioncfg.port.clone().unwrap();
 
     // 如果没有配置心跳，默认120s
-    let heartbeat_interval = conncfg.heartbeat_interval.unwrap_or(120);
+    let heartbeat_interval = perceptioncfg.heartbeat_interval.unwrap_or(120);
 
     println!("ok: {}, {}, {:?}", ip, port, heartbeat_interval);
 
-    coroutines_start(ip, port, heartbeat_interval);
-
-    Ok(())
+    match coroutines_start(ip, port, heartbeat_interval, rediscfg) {
+        Ok(()) => {
+            info!("start perception service success");
+            Ok(())
+        }
+        Err(_) => {
+            panic!("start perception service failed")
+        }
+    }
 }

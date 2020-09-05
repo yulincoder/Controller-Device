@@ -1,15 +1,13 @@
-
 #[allow(unused_imports)]
 use log::{
     error,
     info,
 };
-
 use redis::{
+    aio::Connection,
+    AsyncCommands,
     Client,
     RedisResult,
-    AsyncCommands,
-    aio::Connection,
 };
 
 pub struct RedisConn {
@@ -26,7 +24,7 @@ impl RedisConn {
         match client_result {
             Ok(cli) => {
                 match cli.get_async_connection().await {
-                    Ok(conn) => Ok(RedisConn{conn: Some(conn)}),
+                    Ok(conn) => Ok(RedisConn { conn: Some(conn) }),
                     Err(e) => {
                         error!("get async redis connection fail: {:?}", e);
                         Err(e)
@@ -48,7 +46,7 @@ impl RedisConn {
                     Err(_) => {
                         error!("Set key to redis failed.");
                         Err(())
-                    },
+                    }
                 }
             }
             _ => {
@@ -63,7 +61,7 @@ impl RedisConn {
             conn
         } else {
             error!("Redis conn in RedisConn struct is None");
-            return Err(())
+            return Err(());
         };
 
         match cli.get::<&str, String>(key).await {
@@ -78,12 +76,12 @@ impl RedisConn {
             conn
         } else {
             error!("Redis conn in RedisConn struct is None");
-            return Err(())
+            return Err(());
         };
 
         match cli.lpush::<&str, &str, usize>(list_name, v).await {
             Ok(_) => Ok(()),
-            Err(e) =>{
+            Err(e) => {
                 error!("push msg({}) to list({}) failed: {:?}", v, list_name, e);
                 Err(())
             }
@@ -96,7 +94,7 @@ impl RedisConn {
             conn
         } else {
             error!("Redis conn in RedisConn struct is None");
-            return Err(())
+            return Err(());
         };
 
         match cli.rpop::<&str, String>(list_name).await {
@@ -116,7 +114,7 @@ impl RedisConn {
             return;
         };
 
-         let _: RedisResult<u16> = redis::cmd("del")
+        let _: RedisResult<u16> = redis::cmd("del")
             .arg(key)
             .query_async(cli)
             .await;
