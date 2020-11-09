@@ -23,9 +23,61 @@ mod test_redis_conn {
     use futures::executor::block_on;
 
     use crate::config;
-    use crate::middleware_wrapper::redis_wrapper::RedisConn;
+    use crate::middleware_wrapper::redis_wrapper::{NAMESPACE_DEVICES_BORN, RedisConn};
 
     use super::Bencher;
+
+    /// 测试hash
+    #[test]
+    fn test_hash() {
+        let config: config::Config = config::load_config("cfg.toml", true);
+        let redis_conn = block_on(RedisConn::new(&config.redis.ip.unwrap(), &config.redis.port.unwrap()));
+        let mut conn = if let Ok(instance) = redis_conn {
+            instance
+        } else {
+            assert!(false);
+            panic!("redis connection false");
+        };
+
+        // 设置一个值
+        let sn = "sn_test_1234";
+        let _ = block_on(conn.del_key("sn_test_1234"));
+        let _ = block_on(conn.hset(sn, "online", "true"));
+        let mut status = block_on(conn.hget(sn, "online"));
+        assert_eq!("true".to_string(), status.unwrap());
+
+        // 删除
+        let _ = block_on(conn.hdel(sn, "status"));
+        status = block_on(conn.hget(sn, "status"));
+        assert_eq!(Err(()), status);
+
+        let _ = block_on(conn.hset_online_with_time(sn, "true"));
+        status = block_on(conn.hget(sn, "online"));
+        assert_eq!("true".to_string(), status.unwrap());
+    }
+
+    /// 测试有序集合recent key插入、计数
+    #[test]
+    fn test_sorted_set() {
+        let config: config::Config = config::load_config("cfg.toml", true);
+        let redis_conn = block_on(RedisConn::new(&config.redis.ip.unwrap(), &config.redis.port.unwrap()));
+        let mut conn = if let Ok(instance) = redis_conn {
+            instance
+        } else {
+            assert!(false);
+            panic!("redis connection false");
+        };
+
+        block_on(conn.del_key(NAMESPACE_DEVICES_BORN));
+
+        for i in 0..100 {
+            if block_on(conn.zadd_device_born_with_timestamp(&format!("sn_test_{}", i))).is_err() {
+                assert!(false);
+            }
+        }
+
+        assert_eq!(Ok(100), block_on(conn.zcard_devices_born()));
+    }
 
     /// 测试redis连接->set值->get值
     #[test]

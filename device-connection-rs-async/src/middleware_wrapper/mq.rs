@@ -24,22 +24,22 @@ impl MQ {
     }
 
     /// 推入一条消息到默认优先级(p5)
-    pub async fn push(&mut self, msg: &str) -> Result<(), ()> {
+    pub async fn push(&mut self, msg: &str) -> Result<Option<usize>, ()> {
         self.redis_conn.push_to_list(&self.default_priority, msg).await
     }
 
     /// 推入一条消息到指定优先级队列
-    pub async fn push_p(&mut self, priority: &str, msg: &str) -> Result<(), ()> {
+    pub async fn push_p(&mut self, priority: &str, msg: &str) -> Result<Option<usize>, ()> {
         self.redis_conn.push_to_list(priority, msg).await
     }
 
     /// 从默认优先级(p5)获取一条消息
-    pub async fn pop(&mut self) -> Result<String, ()> {
+    pub async fn pop(&mut self) -> Result<Option<String>, ()> {
         self.redis_conn.pop_from_list(&self.default_priority).await
     }
 
     /// 从指定优先级获取一条消息
-    pub async fn pop_p(&mut self, priority: &str) -> Result<String, ()> {
+    pub async fn pop_p(&mut self, priority: &str) -> Result<Option<String>, ()> {
         self.redis_conn.pop_from_list(priority).await
     }
 

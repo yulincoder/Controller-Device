@@ -1,6 +1,5 @@
+#[allow(dead_code)]
 use log::{error, info, warn};
-use serde_json;
-use serde_json::Value;
 use tokio::{
     io::BufReader,
     io::BufWriter,
@@ -19,6 +18,11 @@ use tcp_err::ServerError;
 
 use crate::common::config::PerceptionServiceConfig as PerceptCfg;
 use crate::common::config::RedisConfig as RedisCfg;
+use crate::middleware_wrapper::json_wrapper::{
+    is_heartbeat,
+    MESTYPE,
+    parse_msg_type,
+};
 use crate::perception_service::map2redis;
 
 use super::device;
@@ -27,146 +31,8 @@ mod tcp_err {
     #[derive(Debug)]
     pub enum ServerError {
         Broken,
+        INVALID_DATA,
     }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum MESTYPE {
-    HEARTBEAT,
-    RAWDATA,
-    INVAILD,
-}
-
-/// If the msg is a heartbeat ping type, return the sn
-///
-/// # Examples
-/// ```
-/// let ok_str = r#"{"type": "ping","sn": "123"}"#;
-/// assert_eq!(carte::is_heartbeat(&ok_str.to_string()), Some("123".to_string()));
-/// let err_str = r#"{"type": "ping","what": "error"}"#;
-/// assert_ne!(carte::is_heartbeat(&err_str.to_string()), Some("123".to_string()));
-/// ```
-fn is_heartbeat(msg: &String) -> Option<String> {
-    let sn: Option<String> = if let Ok(data) = serde_json::from_str(msg) {
-        match data {
-            Value::Object(t) => {
-                let msg_type: Option<String> = if t.contains_key("type") {
-                    match t.get("type").unwrap() {
-                        Value::String(v) => Some(v.to_string()),
-                        _ => None,
-                    }
-                } else {
-                    None
-                };
-
-                match msg_type {
-                    Some(s) if s == "ping" => {
-                        if t.contains_key("sn") {
-                            match t.get("sn").unwrap() {
-                                Value::String(v) => Some(v.to_string()),
-                                _ => None,
-                            }
-                        } else {
-                            None
-                        }
-                    }
-                    _ => None,
-                }
-            }
-            _ => None,
-        }
-    } else {
-        None
-    };
-    sn
-}
-
-#[test]
-fn is_heartbeat_test() {
-    let ok_str = r#"{"type": "ping","sn": "123"}"#;
-    assert_eq!(is_heartbeat(&ok_str.to_string()), Some("123".to_string()));
-    let err_str = r#"{"type": "ping","what": "error"}"#;
-    assert_ne!(is_heartbeat(&err_str.to_string()), Some("123".to_string()));
-}
-
-/// Get sn from a valid json.
-pub fn parse_sn(msg: &String) -> Option<String> {
-    if let Ok(data) = serde_json::from_str(msg) {
-        match data {
-            Value::Object(t) => {
-                if t.contains_key("sn") {
-                    match t.get("sn") {
-                        Some(Value::String(v)) => Some(v.to_string()),
-                        _ => None,
-                    }
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    } else {
-        None
-    }
-}
-
-#[test]
-fn parse_sn_test() {
-    let ok_ping = r#"{"type": "ping","sn": "1234"}"#;
-    assert_eq!(parse_sn(&ok_ping.to_string()), Some("1234".to_string()));
-    let ok_rawdata = r#"{"type": "rawdata","sn": "145623"}"#;
-    assert_eq!(
-        parse_sn(&ok_rawdata.to_string()),
-        Some("145623".to_string())
-    );
-    let err0_sn = r#"{"type": "rawdata","snfuck": "145623"}"#;
-    assert_eq!(parse_sn(&err0_sn.to_string()), None);
-    let err1_sn = r#"{"what": "error"}"#;
-    assert_eq!(parse_sn(&err1_sn.to_string()), None);
-    let err2_sn = r#"{"what": "err"#;
-    assert_eq!(parse_sn(&err2_sn.to_string()), None);
-}
-
-///
-/// When the msg is a valid json and include the `type` field,
-/// but not the heartbeat type, it is a raw data.
-pub fn is_rawdata(msg: &String) -> bool {
-    if let Ok(data) = serde_json::from_str(msg) {
-        match data {
-            Value::Object(t) => {
-                if t.contains_key("type") {
-                    true
-                } else {
-                    false
-                }
-            }
-            _ => false,
-        }
-    } else {
-        false
-    }
-}
-
-pub fn parse_msg_type(msg: &String) -> MESTYPE {
-    if let Some(_) = is_heartbeat(msg) {
-        MESTYPE::HEARTBEAT
-    } else if is_rawdata(msg) {
-        MESTYPE::RAWDATA
-    } else {
-        MESTYPE::INVAILD
-    }
-}
-
-#[test]
-fn parse_msg_type_test() {
-    let ok_ping = r#"{"type": "ping","sn": "123"}"#;
-    assert_eq!(parse_msg_type(&ok_ping.to_string()), MESTYPE::HEARTBEAT);
-    let ok_rawdata = r#"{"type": "rawdata","sn": "123"}"#;
-    assert_eq!(parse_msg_type(&ok_rawdata.to_string()), MESTYPE::RAWDATA);
-    let err1_rawdata = r#"{"what": "error"}"#;
-    assert_eq!(parse_msg_type(&err1_rawdata.to_string()), MESTYPE::INVAILD);
-    let err2_rawdata = r#"{"what": "err"#;
-    assert_eq!(parse_msg_type(&err2_rawdata.to_string()), MESTYPE::INVAILD);
 }
 
 
@@ -204,15 +70,48 @@ async fn handshake<'a>(reader: &'a mut BufReader<ReadHalf<'_>>) -> Result<String
     Err(())
 }
 
+async fn writeline<'a>(
+    stream: &'a mut BufWriter<WriteHalf<'_>>,
+    line: String,
+) -> Result<usize, ServerError> {
+    let mut byte_line: Vec<u8> = line.trim().as_bytes().to_vec();
+    if byte_line.len() == 0 {
+        return Err(ServerError::INVALID_DATA);
+    }
+    byte_line.push('\n' as u8);
+    match stream.write_all(&mut byte_line).await {
+        Ok(_) => {
+            stream.flush().await;
+            info!("write msg -> {:?}", line);
+            Ok(byte_line.len())
+        }
+        Err(_) => {
+            info!("write broken");
+            Err(ServerError::Broken)
+        }
+    }
+}
+
+async fn echo_pong<'a>(stream: &'a mut BufWriter<WriteHalf<'_>>) -> Result<usize, ServerError> {
+    let pong_msg = "{\"type\":\"pong\"}".to_string();
+    writeline(stream, pong_msg).await
+}
+
 /// 连接处理Handler
 async fn handler(mut stream: TcpStream, hb_interval: u64, redis_cfg: RedisCfg) {
-    let (mut stream_read, mut stream_write) = stream.split();
+    let (stream_read, stream_write) = stream.split();
     let mut stream_reader: BufReader<ReadHalf<'_>> = BufReader::new(stream_read);
-    // let mut stream_writer: BufWriter<WriteHalf<'_>> = BufWriter::new(stream_write);
+    let mut stream_writer: BufWriter<WriteHalf<'_>> = BufWriter::new(stream_write);
 
     // 等待新连接40s上报sn信息，超时退出(40s来自并发测试，当瞬间发起大量连接时，从os层面无法及时将这些数据上报到应用层)
     let sn = if let Ok(Ok(v)) = timeout(Duration::from_millis(40000), handshake(&mut stream_reader)).await {
-        v
+        if let Ok(_) = echo_pong(&mut stream_writer).await {
+            info!("handshake ok, from device(sn {})", v);
+            v
+        } else {
+            error!("echo pong msg failed");
+            return;
+        }
     } else {
         error!("invalid sn connection");
         return;
@@ -225,12 +124,11 @@ async fn handler(mut stream: TcpStream, hb_interval: u64, redis_cfg: RedisCfg) {
     // 创建映射到redis的设备
     let mut dev2redis: map2redis::Device2redis;
 
-
     if let (Some(ip), Some(port)) = (&redis_cfg.ip, &redis_cfg.port) {
         if let Ok(v) = map2redis::Device2redis::new(dev, ip, port).await {
             dev2redis = v;
         } else {
-            error!("create dev2redis instance fail");
+            error!("create dev2redis instance fail, redis is running ?");
             return;
         }
     } else {
@@ -252,17 +150,45 @@ async fn handler(mut stream: TcpStream, hb_interval: u64, redis_cfg: RedisCfg) {
     loop {
         tokio::select! {
             read_up = readline(&mut stream_reader) => {
-                if let Ok(v) = read_up {
-                    println!("up msg: {}", v);
+                if let Ok(msg) = read_up {
+                    match parse_msg_type(&msg) {
+                        MESTYPE::HEARTBEAT => {
+                            echo_pong(&mut stream_writer).await;
+                            dev2redis.dev.update_last_heartbeat_time_now();
+                        }
+                        MESTYPE::RAWDATA => {
+                            info!("push event: {:?}", &msg);
+                            dev2redis.notify_event(&msg).await;
+                        }
+                        MESTYPE::ACK => {
+                            info!("ack type {}", &msg);
+                            dev2redis.write_uplink(&msg).await;
+                        }
+                        MESTYPE::INVALID => {
+                            println!("invalid data");
+                        }
+                    }
+
                 }
+
             }
-           // TODO: 这里需要优化，读redis即使没有值也是Ready状态(返回Err), 因此改async函数总是被调度
-           // 所以对CPU的占用非常高?
+
            result = dev2redis.readline_downlink() => {
                if let Ok(msg) = result {
-                   println!("down msg: {:?}", msg);
+                   println!("down link msg: {:?}", msg);
+                   if let Ok(_) = writeline(&mut stream_writer, msg.clone()).await {
+                       println!("send ok: {}", msg);
+                   } else {
+                       println!("send failed")
+                   }
                }
            }
+        }
+
+        // 判断是否过期, 过期则设备离线
+        if !dev2redis.dev.is_alive_update() {
+            dev2redis.deactivate().await;
+            return;
         }
         tokio::time::delay_for(Duration::from_millis(100)).await;
     }

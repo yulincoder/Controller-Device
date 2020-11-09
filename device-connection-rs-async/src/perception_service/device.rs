@@ -35,7 +35,7 @@ impl Device {
             born_time: SystemTime::now(),
             alive: true,
             last_heartbeat_time: SystemTime::now(),
-            heartbeat_period: Duration::from_secs(120),
+            heartbeat_period: Duration::from_secs(20),
         };
         device
     }
@@ -45,10 +45,12 @@ impl Device {
         self.heartbeat_period = period;
     }
 
+    // 更新最后心跳时间
     pub fn update_last_heartbeat_time(&mut self, time: SystemTime) {
         self.last_heartbeat_time = time;
     }
 
+    // 用当前now时间更新最后心跳时间
     pub fn update_last_heartbeat_time_now(&mut self) {
         self.update_last_heartbeat_time(SystemTime::now());
     }

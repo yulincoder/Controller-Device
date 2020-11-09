@@ -1,5 +1,5 @@
 [package]
-name = "connection-v2"
+name = "connection-v2-async"
 version = "0.1.0"
 authors = ["zhangte01"]
 edition = "2018"
@@ -10,9 +10,10 @@ edition = "2018"
 toml = ">=0.4.5"
 serde_derive = ">=1.0.32"
 log = ">=0.4.8"
-loge = {version = ">=0.4.2", features = ["file"]}
+loge = { version = ">=0.4.2", features = ["file"] }
 futures = "0.3.5"
-tokio = {version = ">=0.2", features=["full"]}
+tokio = { version = ">=0.2", features = ["full"] }
 redis = "0.17.0"
 serde_json = "1.0.2"
-serde = {version = ">=1.0.32", features = ["derive"]}
+serde = { version = ">=1.0.32", features = ["derive"] }
+chrono = "0.4.19"
