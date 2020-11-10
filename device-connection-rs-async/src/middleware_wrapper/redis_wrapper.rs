@@ -271,7 +271,6 @@ impl RedisConn {
 
 
     /// 设置指定key的hash表，并设置指定字段和指定值
-    /// TODO: 这里tmd有问题，设备离线的时候设置online为false返回值老是nil
     pub async fn hset(&mut self, key: &str, field: &str, value: &str) -> Result<Option<usize>, ()> {
         let cli = if let Some(conn) = &mut self.conn {
             conn
