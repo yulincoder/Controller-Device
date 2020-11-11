@@ -26,7 +26,7 @@ use crate::middleware_wrapper::json_wrapper::{
 use crate::perception_service::map2redis;
 
 use super::device;
-use std::net::Shutdown;
+//use std::net::Shutdown;
 
 #[allow(non_camel_case_types)]
 mod tcp_err {
@@ -77,13 +77,14 @@ async fn handshake<'a>(reader: &'a mut BufReader<ReadHalf<'_>>) -> Result<String
                 if check_sn(&pinsn) {
                     return Ok(pinsn);
                 } else {
+                    error!("invalid sn {}", pinsn);
                     return Err(());
                 }
             }
         }
         tokio::time::delay_for(Duration::from_millis(100)).await;
     }
-    error!("invalid device");
+    error!("handshake failed");
     Err(())
 }
 
