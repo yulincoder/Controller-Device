@@ -29,6 +29,21 @@ impl Device2redis {
         }
     }
 
+    /// 更新设备在线状态，用于每次收到消息，就更新设备在线, 主要更新status online字段和添加online
+    pub async fn update_online_status(&mut self) -> bool {
+        info!("update 'online' failed: sn {}",self.dev.sn);
+        if self.redis_conn.hset(&format!("{}/{}", NAMESPACE_DEVICE_STATUS, self.dev.sn), "online", "true").await.is_err() {
+            error!("update 'online' failed: sn {}",self.dev.sn);
+            return false
+        }
+
+        if let Err(_) = self.redis_conn.zadd_device_alive_with_timestamp(&self.dev.sn).await {
+            error!("set redis fail");
+            return false;
+        }
+        true
+    }
+
     pub async fn activate(&mut self) -> bool {
 
         // 添加到在线设备集合中

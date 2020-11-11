@@ -170,6 +170,7 @@ async fn handler(mut stream: TcpStream, hb_interval: u64, redis_cfg: RedisCfg) {
     loop {
         tokio::select! {
             read_up = readline(&mut stream_reader) => {
+                dev2redis.update_online_status().await; // 收到消息，就更新在线状态
                 if let Ok(msg) = read_up {
                     match parse_msg_type(&msg) {
                         MESTYPE::HEARTBEAT => {
@@ -214,11 +215,6 @@ async fn handler(mut stream: TcpStream, hb_interval: u64, redis_cfg: RedisCfg) {
         // 判断是否过期, 过期则设备离线
         if !dev2redis.dev.is_alive_update() {
             dev2redis.deactivate().await;
-
-            // 似乎没什么用，drop的时候会关掉
-            /*if stream.shutdown(Shutdown::Both).is_err() {
-                error!("shutdown the stream failed: dev {}", dev2redis.dev.sn)
-            }*/
             return;
         }
         tokio::time::delay_for(Duration::from_millis(100)).await;
