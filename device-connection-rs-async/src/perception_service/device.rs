@@ -35,7 +35,7 @@ impl Device {
             born_time: SystemTime::now(),
             alive: true,
             last_heartbeat_time: SystemTime::now(),
-            heartbeat_period: Duration::from_secs(20),
+            heartbeat_period: Duration::from_secs(90),
         };
         device
     }

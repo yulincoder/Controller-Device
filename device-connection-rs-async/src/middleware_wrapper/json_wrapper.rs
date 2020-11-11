@@ -27,8 +27,8 @@ pub fn is_heartbeat(msg: &String) -> Option<String> {
         match data {
             Value::Object(t) => {
                 let msg_type: Option<String> = if t.contains_key("type") {
-                    match t.get("type").unwrap() {
-                        Value::String(v) => Some(v.to_string()),
+                    match t.get("type") {
+                        Some(Value::String(v)) => Some(v.to_string()),
                         _ => None,
                     }
                 } else {
@@ -38,8 +38,8 @@ pub fn is_heartbeat(msg: &String) -> Option<String> {
                 match msg_type {
                     Some(s) if s == "ping" => {
                         if t.contains_key("sn") {
-                            match t.get("sn").unwrap() {
-                                Value::String(v) => Some(v.to_string()),
+                            match t.get("sn") {
+                                Some(Value::String(v)) => Some(v.to_string()),
                                 _ => None,
                             }
                         } else {
@@ -70,8 +70,8 @@ pub fn parse_sn(msg: &String) -> Option<String> {
         match data {
             Value::Object(t) => {
                 if t.contains_key("sn") {
-                    match t.get("sn").unwrap() {
-                        Value::String(v) => Some(v.to_string()),
+                    match t.get("sn") {
+                        Some(Value::String(v)) => Some(v.to_string()),
                         _ => None,
                     }
                 } else {
@@ -130,8 +130,8 @@ pub fn is_ack(msg: &str) -> Option<String> {
         match data {
             Value::Object(t) => {
                 let msg_type: Option<String> = if t.contains_key("type") {
-                    match t.get("type").unwrap() {
-                        Value::String(v) => Some(v.to_string()),
+                    match t.get("type") {
+                        Some(Value::String(v)) => Some(v.to_string()),
                         _ => None,
                     }
                 } else {
@@ -141,8 +141,8 @@ pub fn is_ack(msg: &str) -> Option<String> {
                 match msg_type {
                     Some(s) if s == "setack" || s == "getack" => {
                         if t.contains_key("sn") {
-                            match t.get("sn").unwrap() {
-                                Value::String(v) => Some(v.to_string()),
+                            match t.get("sn") {
+                                Some(Value::String(v)) => Some(v.to_string()),
                                 _ => None,
                             }
                         } else {

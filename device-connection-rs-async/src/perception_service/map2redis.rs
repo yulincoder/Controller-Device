@@ -69,7 +69,7 @@ impl Device2redis {
     }
 
     pub async fn deactivate(&mut self) -> bool {
-        error!("device offline");
+        warn!("device offline");
         // 设置在线状态为false
         let v1 = match self.redis_conn.hset_online_with_time(&format!("{}/{}", NAMESPACE_DEVICE_STATUS, self.dev.sn), "false").await {
             Ok(_) => true,

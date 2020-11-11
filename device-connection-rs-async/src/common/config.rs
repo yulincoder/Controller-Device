@@ -45,14 +45,6 @@ pub struct PerceptionServiceConfig {
 #[derive(Deserialize)]
 #[derive(Debug)]
 #[derive(Clone)]
-pub struct ApplicationServiceConfig {
-    pub ip: Option<String>,
-    pub port: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[derive(Debug)]
-#[derive(Clone)]
 pub struct RedisConfig {
     pub ip: Option<String>,
     pub port: Option<String>,
@@ -64,7 +56,6 @@ pub struct RedisConfig {
 pub struct Config {
     pub log: LogConfig,
     pub perception_service: PerceptionServiceConfig,
-    pub application_service: ApplicationServiceConfig,
     pub redis: RedisConfig,
 }
 
@@ -136,16 +127,6 @@ pub fn load_config(toml_path: &str, verbose: bool) -> Config {
             "Null".to_string()
         }, if let Some(e) = &config.perception_service.heartbeat_interval {
             format!("{}", &e)
-        } else {
-            "Null".to_string()
-        });
-
-        println!("[application service]: \n\tip = {:?}\n\tport = {:?}", if let Some(e) = &config.application_service.ip {
-            e.clone()
-        } else {
-            "Null".to_string()
-        }, if let Some(e) = &config.application_service.port {
-            e.clone()
         } else {
             "Null".to_string()
         });

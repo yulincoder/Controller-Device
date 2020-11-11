@@ -5,4 +5,3 @@
 pub mod redis_wrapper;
 pub mod json_wrapper;
 pub mod redis_test;
-pub mod mq;

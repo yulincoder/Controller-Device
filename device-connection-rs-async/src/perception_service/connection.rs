@@ -26,7 +26,9 @@ use crate::middleware_wrapper::json_wrapper::{
 use crate::perception_service::map2redis;
 
 use super::device;
+use std::net::Shutdown;
 
+#[allow(non_camel_case_types)]
 mod tcp_err {
     #[derive(Debug)]
     pub enum ServerError {
@@ -53,6 +55,17 @@ async fn readline<'a>(stream: &'a mut BufReader<ReadHalf<'_>>) -> Result<String,
     }
 }
 
+fn check_sn(sn: &str) -> bool {
+    match sn.len() {
+        13 => {
+            true
+        }
+        _ => {
+            false
+        }
+    }
+}
+
 /// 握手成功返回sn
 async fn handshake<'a>(reader: &'a mut BufReader<ReadHalf<'_>>) -> Result<String, ()> {
     let pinsn: String;
@@ -61,7 +74,11 @@ async fn handshake<'a>(reader: &'a mut BufReader<ReadHalf<'_>>) -> Result<String
             if let Some(sn) = is_heartbeat(&msg) {
                 info!("sn {}", sn);
                 pinsn = sn.clone().trim().to_string();
-                return Ok(pinsn);
+                if check_sn(&pinsn) {
+                    return Ok(pinsn);
+                } else {
+                    return Err(());
+                }
             }
         }
         tokio::time::delay_for(Duration::from_millis(100)).await;
@@ -81,7 +98,9 @@ async fn writeline<'a>(
     byte_line.push('\n' as u8);
     match stream.write_all(&mut byte_line).await {
         Ok(_) => {
-            stream.flush().await;
+            if stream.flush().await.is_err() {
+                warn!("flush with writeline tcp fail")
+            }
             info!("write msg -> {:?}", line);
             Ok(byte_line.len())
         }
@@ -137,7 +156,7 @@ async fn handler(mut stream: TcpStream, hb_interval: u64, redis_cfg: RedisCfg) {
     }
 
     // 激活设备，包括向redis添加设备上线信息
-    println!("device: {:?}", dev2redis.dev.sn);
+    info!("device: {:?}", dev2redis.dev.sn);
     if !dev2redis.activate().await {
         error!("activated device({}) fail", dev2redis.dev.sn);
         if !dev2redis.deactivate().await {
@@ -153,19 +172,25 @@ async fn handler(mut stream: TcpStream, hb_interval: u64, redis_cfg: RedisCfg) {
                 if let Ok(msg) = read_up {
                     match parse_msg_type(&msg) {
                         MESTYPE::HEARTBEAT => {
-                            echo_pong(&mut stream_writer).await;
+                            if echo_pong(&mut stream_writer).await.is_err() {
+                                warn!("pong to heartbeat failed: dev {}, msg {}", dev2redis.dev.sn, msg);
+                            }
                             dev2redis.dev.update_last_heartbeat_time_now();
                         }
                         MESTYPE::RAWDATA => {
                             info!("push event: {:?}", &msg);
-                            dev2redis.notify_event(&msg).await;
+                            if dev2redis.notify_event(&msg).await.is_err() {
+                                warn!("push event failed: dev {}, msg {}", dev2redis.dev.sn, msg);
+                            }
                         }
                         MESTYPE::ACK => {
                             info!("ack type {}", &msg);
-                            dev2redis.write_uplink(&msg).await;
+                            if dev2redis.write_uplink(&msg).await.is_err() {
+                                warn!("write uplink stream failed: dev {}, msg {}", dev2redis.dev.sn, msg);
+                            }
                         }
                         MESTYPE::INVALID => {
-                            println!("invalid data");
+                            warn!("invalid data: dev {}", dev2redis.dev.sn);
                         }
                     }
 
@@ -175,11 +200,11 @@ async fn handler(mut stream: TcpStream, hb_interval: u64, redis_cfg: RedisCfg) {
 
            result = dev2redis.readline_downlink() => {
                if let Ok(msg) = result {
-                   println!("down link msg: {:?}", msg);
+                   info!("down link msg: {:?}", msg);
                    if let Ok(_) = writeline(&mut stream_writer, msg.clone()).await {
-                       println!("send ok: {}", msg);
+                       info!("send ok: {}", msg);
                    } else {
-                       println!("send failed")
+                       warn!("send failed")
                    }
                }
            }
@@ -188,6 +213,11 @@ async fn handler(mut stream: TcpStream, hb_interval: u64, redis_cfg: RedisCfg) {
         // 判断是否过期, 过期则设备离线
         if !dev2redis.dev.is_alive_update() {
             dev2redis.deactivate().await;
+
+            // 似乎没什么用，drop的时候会关掉
+            /*if stream.shutdown(Shutdown::Both).is_err() {
+                error!("shutdown the stream failed: dev {}", dev2redis.dev.sn)
+            }*/
             return;
         }
         tokio::time::delay_for(Duration::from_millis(100)).await;
@@ -217,7 +247,6 @@ fn coroutines_start(ip: String, port: String, hb_interval: u64, redis_cfg: Redis
         info!("open the addr to listen {}", addr);
         let mut incoming = listener.incoming();
 
-        // TODO 目前没有获取ip地址，将来需要绘制用户分布地图，需要ip
         // 监听端口，或许第二种loop方法更容错?
         //while let Some(stream) = incoming.next().await {
         loop {
@@ -247,8 +276,6 @@ pub fn start(perceptioncfg: PerceptCfg, rediscfg: RedisCfg) -> Result<(), ()> {
 
     // 如果没有配置心跳，默认120s
     let heartbeat_interval = perceptioncfg.heartbeat_interval.unwrap_or(120);
-
-    println!("ok: {}, {}, {:?}", ip, port, heartbeat_interval);
 
     match coroutines_start(ip, port, heartbeat_interval, rediscfg) {
         Ok(()) => {

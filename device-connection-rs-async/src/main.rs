@@ -11,7 +11,6 @@ use log::{
 use common::config;
 use perception_service::connection as device_conn;
 
-mod application_service;
 mod perception_service;
 mod middleware_wrapper;
 mod common;

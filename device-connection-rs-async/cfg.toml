@@ -1,25 +1,16 @@
 [log]
-level = "info"          # trace, debug, info, warn, error, none
+level = "warn"          # trace, debug, info, warn, error, none
 outfile = "log.log"
 format = "fileline"      # fileline, target, json
 
 [perception_service]
-ip = "127.0.0.1"
+ip = "0.0.0.0"
 port = "8000"
-heartbeat_interval = 60  # Seconds
-
-[application_service]
-ip = "127.0.0.1"
-port = "8000"
+heartbeat_interval = 120  # Seconds
 
 [redis]
 ip = "172.20.88.128"
 port = "6379"
-
-[middleware]
-redis_cluster = ["", ""]
-port = ""
-
 
 [alarm]
 edge_trigger = ["error", "warn"]

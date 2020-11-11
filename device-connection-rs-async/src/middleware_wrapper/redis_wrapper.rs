@@ -8,7 +8,6 @@ use log::{
 use redis::{
     aio::Connection,
     AsyncCommands,
-    Client,
     cmd as redis_cmd,
     RedisResult,
 };
@@ -341,52 +340,13 @@ impl RedisConn {
 
     /// 设置指定key的`status`字段，并同时设置当前时间戳
     pub async fn hset_online_with_time(&mut self, key: &str, online: &str) -> Result<u64, ()> {
-        self.hset(key, "online", online).await.is_ok();
-        self.hset_toggletime(key).await;
+        if self.hset(key, "online", online).await.is_err() {
+            error!("set status field 'online' failed: key {}, online {}", key, online);
+        }
+        if self.hset_toggletime(key).await.is_err() {
+            error!("set status field 'toggletime' failed: key {}, online {}", key, online);
+        }
         Ok(0)
     }
 }
 
-
-/// ### 获取设备数量
-/// 表示曾经连接过云端的设备数量
-#[allow(dead_code)]
-pub async fn get_devices_num() {
-    //TODO redis历史上线设备数量查询
-}
-
-/// ### 当前在线设备数量
-#[allow(dead_code)]
-pub async fn get_alive_devices_num() {
-    //TODO redis当前在线设备数量插叙
-}
-
-#[allow(dead_code)]
-pub async fn test_redis_async() -> redis::RedisResult<()> {
-    let client: Client = redis::Client::open("redis://127.0.0.1/").unwrap();
-    let mut con: Connection = client.get_async_connection().await?;
-
-    for i in 3..100 {
-        con.set(format!("fukkkkkkkkk : {}", i), b"fucko").await?;
-    }
-
-
-    let keys_query: RedisResult<Vec<String>> = redis::cmd("keys")
-        .arg("*")
-        .query_async(&mut con)
-        .await;
-
-    if let Ok(keys) = keys_query {}
-
-    redis::cmd("SET")
-        .arg(&["key2", "bar"])
-        .query_async(&mut con)
-        .await?;
-
-    let result: RedisResult<(String, Vec<u8>)> = redis::cmd("MGET")
-        .arg(&["key1", "key2"])
-        .query_async(&mut con)
-        .await;
-
-    Ok(())
-}
