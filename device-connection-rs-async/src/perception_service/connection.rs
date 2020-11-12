@@ -26,6 +26,7 @@ use crate::middleware_wrapper::json_wrapper::{
 use crate::perception_service::map2redis;
 
 use super::device;
+
 //use std::net::Shutdown;
 
 #[allow(non_camel_case_types)]
@@ -170,14 +171,14 @@ async fn handler(mut stream: TcpStream, hb_interval: u64, redis_cfg: RedisCfg) {
     loop {
         tokio::select! {
             read_up = readline(&mut stream_reader) => {
-                dev2redis.update_online_status().await; // 收到消息，就更新在线状态
                 if let Ok(msg) = read_up {
+                    dev2redis.update_online_status().await; // 收到消息，就更新redis中在线状态
+                    dev2redis.dev.update_last_heartbeat_time_now(); // 收到消息，就更新本地心跳超时计时
                     match parse_msg_type(&msg) {
                         MESTYPE::HEARTBEAT => {
                             if echo_pong(&mut stream_writer).await.is_err() {
                                 warn!("pong to heartbeat failed: dev {}, msg {}", dev2redis.dev.sn, msg);
                             }
-                            dev2redis.dev.update_last_heartbeat_time_now();
                         }
                         MESTYPE::RAWDATA => {
                             info!("push event: {:?}", &msg);

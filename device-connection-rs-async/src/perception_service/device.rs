@@ -11,10 +11,8 @@ use log::{
 };
 #[allow(unused_imports)]
 use tokio::{
-    net::TcpListener,
-    net::TcpStream,
-    stream::StreamExt,
-    time};
+    net::TcpStream
+};
 
 pub struct Device {
     pub sn: String,

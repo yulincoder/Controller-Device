@@ -31,10 +31,10 @@ impl Device2redis {
 
     /// 更新设备在线状态，用于每次收到消息，就更新设备在线, 主要更新status online字段和添加online
     pub async fn update_online_status(&mut self) -> bool {
-        info!("update 'online' failed: sn {}",self.dev.sn);
+        info!("update 'online' failed: sn {}", self.dev.sn);
         if self.redis_conn.hset(&format!("{}/{}", NAMESPACE_DEVICE_STATUS, self.dev.sn), "online", "true").await.is_err() {
-            error!("update 'online' failed: sn {}",self.dev.sn);
-            return false
+            error!("update 'online' failed: sn {}", self.dev.sn);
+            return false;
         }
 
         if let Err(_) = self.redis_conn.zadd_device_alive_with_timestamp(&self.dev.sn).await {
@@ -137,8 +137,8 @@ mod test_redis_conn {
 
     #[test]
     fn test_deactivate() {
-        let mut d2r = block_on(Device2redis::new(Device::new("test".to_string()), "127.0.0.1", "6379"));
-        //block_on(d2r.unwrap().activate());
+        let d2r = block_on(Device2redis::new(Device::new("test".to_string()), "127.0.0.1", "6379"));
+        block_on(d2r.unwrap().activate());
         //assert_eq!(Ok(_), block_on(d2r.unwrap().activate()));
     }
 }

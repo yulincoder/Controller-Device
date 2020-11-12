@@ -127,7 +127,7 @@ mod test_redis_conn {
 
         for i in 0..=100 {
             if let Ok(v) = block_on(conn.pop_from_list("test-p5")) {
-                assert_eq!(format!("fuck-{}", i), v);
+                assert_eq!(format!("fuck-{:?}", i), v.unwrap());
             } else {
                 assert!(false);
             }
@@ -142,56 +142,6 @@ mod test_redis_conn {
         b.iter(|| {
             let redis_conn = block_on(RedisConn::new(&config.redis.ip.borrow().as_ref().unwrap(), &config.redis.port.borrow().as_ref().unwrap()));
             if redis_conn.is_err() {
-                assert!(false);
-            };
-        });
-    }
-}
-
-#[cfg(test)]
-mod test_mq {
-    use std::borrow::Borrow;
-
-    use futures::executor::block_on;
-
-    use crate::config;
-
-    use super::Bencher;
-    use super::super::mq::MQ;
-
-    /// 测试队列push->pop
-    #[test]
-    fn test_push_pop() {
-        let config: config::Config = config::load_config("cfg.toml", true);
-        let mq_conn = block_on(MQ::new(&config.redis.ip.unwrap(), &config.redis.port.unwrap()));
-        let mut mq = if let Ok(instance) = mq_conn {
-            instance
-        } else {
-            assert!(false);
-            panic!("redis connection false");
-        };
-
-        block_on(mq.clear());
-
-        for i in 0..=100 {
-            if block_on(mq.push(&format!("fuck-{}", i))).is_err() {
-                assert!(false);
-            }
-        }
-        for i in 0..=100 {
-            if let Ok(v) = block_on(mq.pop()) {
-                assert_eq!(format!("fuck-{}", i), v);
-            }
-        }
-    }
-
-    /// 基准测试队列push
-    #[bench]
-    fn bench_mq_conn_new(b: &mut Bencher) {
-        let config: config::Config = config::load_config("cfg.toml", true);
-        b.iter(|| {
-            let mq_conn = block_on(MQ::new(&config.redis.ip.borrow().as_ref().unwrap(), &config.redis.port.borrow().as_ref().unwrap()));
-            if mq_conn.is_err() {
                 assert!(false);
             };
         });
