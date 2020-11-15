@@ -116,7 +116,7 @@ pub async fn readline_uplink(sn: &str) -> Result<String, String> {
         let _ = redis_conn.hdel(&*format!("{}/{}", NAMESPACE_DEVICE_STATUS, sn), "uplink").await;
         Ok(v)
     } else {
-        warn!("dev {} {}", sn, "read redis hash fail".to_string());
+        //warn!("dev {} {}", sn, "read redis hash fail".to_string());
         Err("read redis hash fail".to_string())
     }
 }
@@ -139,7 +139,7 @@ pub async fn transparent_transmit_wit_ack(sn: &str, msg: &str) -> Result<Option<
         if let Ok(rv) = readline_uplink(sn).await {
             return Ok(Some(format!("{}", rv)));
         } else {
-            warn!("dev {}, delay {}", sn, i);
+            //warn!("dev {}, delay {}", sn, i);
             delay_for(Duration::from_millis(100)).await;
         }
     };
