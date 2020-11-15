@@ -119,7 +119,6 @@ async fn push_get(
 
     match String::from_utf8(body.to_vec()) {
         Ok(body_string) => {
-            println!("data: {}", body_string);
             let sn = if let Some(sn) = jw::parse_sn(&body_string) {
                 sn
             } else {
