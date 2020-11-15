@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+#[allow(unused_imports)]
 use log::{error, info, warn};
 use serde_json;
 use serde_json::Value;

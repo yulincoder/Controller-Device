@@ -1,17 +1,25 @@
-use std::time::Duration;
-
 use actix_web::{
     App,
-    Error, error, get, HttpRequest, HttpResponse, HttpServer, post, Responder, web, web::BytesMut};
+    Error,
+    error,
+    get,
+    HttpResponse,
+    //HttpRequest,
+    HttpServer,
+    post,
+    //Responder,
+    web,
+    web::BytesMut};
+use futures::StreamExt;
+#[allow(unused_imports)]
 use log::{error, info, warn};
 use serde_json::json;
 
+use crate::common::config;
 use crate::middleware::{
-    query_redis as qr,
-    redis_wrapper as rw,
     json_warpper as jw,
+    query_redis as qr,
 };
-use futures::StreamExt;
 
 #[get("/query/service_version")]
 async fn query_service_version() -> Result<HttpResponse, Error> {
@@ -25,7 +33,7 @@ async fn query_service_version() -> Result<HttpResponse, Error> {
 
 #[get("/query/devices_num")]
 async fn query_devices_num() -> Result<HttpResponse, Error> {
-    let mut rv = qr::get_devices_num().await;
+    let rv = qr::get_devices_num().await;
     let resp = if let Ok(e) = rv {
         json!({
             "namespace": "/query/devices_num".to_string(),
@@ -45,7 +53,7 @@ async fn query_devices_num() -> Result<HttpResponse, Error> {
 
 #[get("/query/devices_alive_num")]
 async fn query_devices_alive_num() -> Result<HttpResponse, Error> {
-    let mut rv = qr::get_alive_devices_num().await;
+    let rv = qr::get_alive_devices_num().await;
     let resp = if let Ok(e) = rv {
         json!({
             "namespace": "/query/device_alive_num".to_string(),
@@ -68,7 +76,6 @@ async fn query_device_is_alive(
     info: web::Path<String>,
 ) -> Result<HttpResponse, Error> {
     let sn = info.to_string();
-    let rv = qr::sn_is_alive(&sn).await;
 
     let resp = if qr::sn_is_alive(&sn).await {
         json!({
@@ -157,7 +164,7 @@ async fn push_get(
             }
         }
         _ => {
-            return Err(error::ErrorBadRequest(json ! ({
+            return Err(error::ErrorBadRequest(json!({
                 "namespace": "/push/push_msg",
                 "error": "invalid data"
                 })));
@@ -166,7 +173,7 @@ async fn push_get(
 }
 
 #[actix_web::main]
-pub async fn launch() -> std::io::Result<()> {
+pub async fn launch(httpconf: config::HttpServiceConfig, _redisconf: config::RedisConfig) -> std::io::Result<()> {
     HttpServer::new(move || {
         //let s = RedisSession::new("127.0.0.1:6379", &[0; 32]);
         App::new()
@@ -178,7 +185,8 @@ pub async fn launch() -> std::io::Result<()> {
             .service(query_device_is_alive)
             .service(push_get)
     })
-        .bind("127.0.0.1:8080")?
+        .bind(format!("{}:{}", httpconf.ip.unwrap_or("127.0.0.1".to_string()),
+                      httpconf.port.unwrap_or("8000".to_string())))?
         .run()
         .await
 }

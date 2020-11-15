@@ -7,7 +7,6 @@ use redis::{
     aio::Connection,
     AsyncCommands,
     Client,
-    cmd,
     cmd as redis_cmd,
     RedisResult,
 };
@@ -21,7 +20,7 @@ impl RedisConn {
     /// 建立一个redis async连接
     pub async fn new(ip: &str, port: &str) -> RedisResult<RedisConn> {
         let _redis_addr = format!("redis://{}:{}/", ip, port);
-        let client_result = redis::Client::open(_redis_addr);
+        let client_result = Client::open(_redis_addr);
 
         match client_result {
             Ok(cli) => {

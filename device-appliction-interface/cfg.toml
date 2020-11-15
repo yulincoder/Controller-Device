@@ -1,0 +1,14 @@
+[http_service]
+ip = "0.0.0.0"
+port = "8000"
+
+# redis配置现在没有启用，目前写死
+# redis现在没有使用连接池，或许在有必要的时候，重构使用连接池，再使用这个参数
+[redis]
+ip = "172.20.88.128"
+port = "6379"
+
+[log]
+level = "warn"          # trace, debug, info, warn, error, none
+outfile = "httpservice.log"
+format = "fileline"      # fileline, target, json
