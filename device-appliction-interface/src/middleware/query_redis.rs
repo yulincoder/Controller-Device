@@ -5,7 +5,7 @@ use tokio::time::delay_for;
 
 use super::redis_wrapper as rw;
 
-const REDIS_ADDR: &str = "172.20.88.128";
+const REDIS_ADDR: &str = "127.0.0.1";
 const REDIS_PORT: &str = "6379";
 
 pub const NAMESPACE_DEVICES_BORN: &str = "csod/devices_born";

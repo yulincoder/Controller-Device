@@ -185,7 +185,7 @@ pub async fn launch(httpconf: config::HttpServiceConfig, _redisconf: config::Red
             .service(query_device_is_alive)
             .service(push_get)
     })
-        .bind(format!("{}:{}", httpconf.ip.unwrap_or("127.0.0.1".to_string()),
+        .bind(format!("{}:{}", httpconf.ip.unwrap_or("0.0.0.0".to_string()),
                       httpconf.port.unwrap_or("8000".to_string())))?
         .run()
         .await
