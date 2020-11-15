@@ -5,11 +5,11 @@ format = "fileline"      # fileline, target, json
 
 [perception_service]
 ip = "0.0.0.0"
-port = "8000"
+port = "8900"
 heartbeat_interval = 120  # Seconds
 
 [redis]
-ip = "172.20.88.128"
+ip = "127.0.0.1"
 port = "6379"
 
 [alarm]
